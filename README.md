@@ -128,6 +128,160 @@ En Termux se recomienda compilar nativamente (`cargo build --release`); el
 binario Android de Releases es una alternativa para dispositivos compatibles.
 El build local de Termux se copia a `dist/businesscan-termux-arm64`.
 
+### Añadir `businesscan` al PATH
+
+Los ejemplos de este README asumen que ejecutas `businesscan` desde el `PATH`.
+Si lo lanzas directamente desde `dist/`, usa el nombre completo, por ejemplo
+`./dist/businesscan-termux-arm64`.
+
+#### Termux
+
+```bash
+chmod +x businesscan-android-arm64
+./businesscan-android-arm64 --version
+
+mkdir -p "$PREFIX/bin"
+install -m755 businesscan-android-arm64 "$PREFIX/bin/businesscan"
+businesscan --version
+```
+
+`$PREFIX/bin` ya está en el `PATH` de Termux. Si prefieres `~/.local/bin`:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+install -m755 businesscan-android-arm64 "$HOME/.local/bin/businesscan"
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+businesscan --version
+```
+
+Si compilaste desde el código, también puedes usar:
+
+```bash
+make termux
+# o
+./scripts/build-termux.sh
+```
+
+Ambos instalan en `$PREFIX/bin/businesscan`.
+
+#### Linux
+
+```bash
+chmod +x businesscan-linux-x86_64
+./businesscan-linux-x86_64 --version
+
+mkdir -p "$HOME/.local/bin"
+install -m755 businesscan-linux-x86_64 "$HOME/.local/bin/businesscan"
+```
+
+Añade `~/.local/bin` al `PATH` si no está:
+
+```bash
+# Bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+# Zsh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+command -v businesscan
+businesscan --version
+```
+
+Instalación para todos los usuarios (requiere `sudo`):
+
+```bash
+sudo install -m755 businesscan-linux-x86_64 /usr/local/bin/businesscan
+```
+
+#### macOS
+
+```bash
+chmod +x businesscan-macos-arm64
+xattr -d com.apple.quarantine businesscan-macos-arm64 2>/dev/null || true
+./businesscan-macos-arm64 --version
+
+mkdir -p "$HOME/.local/bin"
+install -m755 businesscan-macos-arm64 "$HOME/.local/bin/businesscan"
+```
+
+Añade `~/.local/bin` al `PATH` en `~/.zshrc`:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+command -v businesscan
+```
+
+En macOS Intel usa `businesscan-macos-x86_64`; cambia el nombre del archivo en
+los comandos anteriores.
+
+#### Windows (PowerShell)
+
+```powershell
+.\businesscan-windows-x86_64.exe --version
+
+$bin = "$HOME\bin"
+New-Item -ItemType Directory -Force $bin | Out-Null
+Copy-Item .\businesscan-windows-x86_64.exe "$bin\businesscan.exe" -Force
+
+[Environment]::SetEnvironmentVariable(
+  "Path",
+  "$bin;" + [Environment]::GetEnvironmentVariable("Path", "User"),
+  "User"
+)
+```
+
+Cierra y abre PowerShell, y verifica:
+
+```powershell
+Get-Command businesscan
+businesscan --version
+```
+
+Si no puedes modificar el `PATH`, renombra el `.exe` a `businesscan.exe` en la
+carpeta donde lo descargaste y ejecútalo con `.\businesscan.exe`.
+
+#### Instalación con Cargo
+
+```bash
+cargo install --path .
+```
+
+Cargo deja el binario en:
+
+- Linux/macOS/Termux: `~/.cargo/bin/businesscan`
+- Windows: `%USERPROFILE%\.cargo\bin\businesscan.exe`
+
+Si esa carpeta no está en el `PATH`:
+
+```bash
+# Bash/Zsh
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+En Windows añade `%USERPROFILE%\.cargo\bin` desde **Variables de entorno** o
+con PowerShell de forma equivalente a la sección anterior.
+
+#### Verificación
+
+```bash
+command -v businesscan     # Linux/macOS/Termux
+businesscan --version
+businesscan sources
+businesscan db path
+```
+
+En Windows:
+
+```powershell
+where.exe businesscan
+businesscan --version
+```
+
 ### Desde el código
 
 Requisitos:
@@ -151,6 +305,9 @@ businesscan db path
 ```
 
 ## Inicio rápido
+
+Los ejemplos asumen que `businesscan` está en el `PATH`; si no, usa
+`./dist/businesscan-termux-arm64` o el nombre del artefacto correspondiente.
 
 ```bash
 # 1. Crear la base (también se crea sola al usarla)
