@@ -336,7 +336,7 @@ pub async fn run(
         println!(
             "  {} {}",
             theme.muted("Siguiente:"),
-            theme.cyan("businesscan search --departamento <depto> --has-phone")
+            theme.cyan("businesscan search --country <país> --department <depto> --limit 10")
         );
         println!();
     }

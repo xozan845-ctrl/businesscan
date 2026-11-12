@@ -320,8 +320,11 @@ businesscan scan --country NI --department León --limit 200
 businesscan search "ferretería" --country NI --has-phone
 businesscan search --country NI --city Managua --category restaurante --limit 10
 
-# 4. Ver una ficha completa (el ID corto es único en la lista)
-businesscan show 7ZQ2TVRR
+# 4. Obtener un ID real y ver la ficha completa
+businesscan search --country NI --limit 5 --wide
+businesscan show <id-corto>
+
+# El ID corto son los últimos 8 caracteres del ULID que muestra la tabla.
 
 # 5. Exportar para una IA
 businesscan export --format jsonl -o negocios.jsonl
@@ -555,9 +558,9 @@ Muestra la ficha completa: contactos, dirección, coordenadas, horarios, rating,
 categorías, alias, etiquetas, procedencia y fechas.
 
 ```bash
-businesscan show 7ZQ2TVRR
-businesscan show 7ZQ2TVRR --raw
-businesscan show 7ZQ2TVRR --json
+businesscan show <id-corto>
+businesscan show <id-corto> --raw
+businesscan show <id-corto> --json
 ```
 
 Acepta ID completo o un prefijo único; los IDs cortos que muestra la CLI son los

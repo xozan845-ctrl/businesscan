@@ -44,7 +44,9 @@ pub fn run(args: SearchArgs, config: &Config, global: &GlobalArgs, theme: &Theme
         );
         println!(
             "  {}",
-            theme.muted("Prueba con menos filtros o ejecuta `businesscan scan --place \"...\"`.")
+            theme.muted(
+                "Prueba con menos filtros, revisa `businesscan stats` o ejecuta `businesscan search --limit 10`."
+            )
         );
         println!();
         return Ok(0);
