@@ -24,7 +24,11 @@ pub fn run(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i32> {
         .map(|provider| {
             let available = provider.is_available(config);
             let status = if !provider.requires_key() {
-                "lista".to_string()
+                if available {
+                    "lista".to_string()
+                } else {
+                    "falta --overture-file".to_string()
+                }
             } else if available {
                 "clave configurada".to_string()
             } else {
@@ -40,6 +44,23 @@ pub fn run(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i32> {
             }
         })
         .collect();
+    let mut sources = sources;
+    sources.push(SourceInfo {
+        name: "web".to_string(),
+        description: "Enriquecimiento desde el sitio web del negocio (nicascan enrich)".to_string(),
+        requires_key: false,
+        key_env: None,
+        available: true,
+        status: "lista".to_string(),
+    });
+    sources.push(SourceInfo {
+        name: "import".to_string(),
+        description: "CSV/JSON/JSONL de MIFIC, cámaras, INE o planillas propias".to_string(),
+        requires_key: false,
+        key_env: None,
+        available: true,
+        status: "lista".to_string(),
+    });
 
     if global.json {
         println!("{}", serde_json::to_string_pretty(&sources)?);
@@ -66,8 +87,8 @@ pub fn run(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i32> {
     println!(
         "  {}",
         theme.muted(
-            "Variables: GOOGLE_PLACES_API_KEY, FOURSQUARE_API_KEY. \
-             OSM no requiere clave y es la fuente por defecto."
+            "Variables: GOOGLE_PLACES_API_KEY, FOURSQUARE_API_KEY; Overture usa \
+             NICASCAN_OVERTURE_FILE o --overture-file. OSM no requiere clave."
         )
     );
     println!(

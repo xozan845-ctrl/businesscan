@@ -21,11 +21,13 @@ pub struct Config {
     pub nominatim_url: String,
     pub google_places_key: Option<String>,
     pub foursquare_key: Option<String>,
+    pub overture_file: Option<std::path::PathBuf>,
     pub user_agent: String,
     pub language: String,
     pub http_timeout: Duration,
     pub overpass_timeout: Duration,
     pub nominatim_interval: Duration,
+    pub enrich_delay_ms: u64,
     pub offline: bool,
 }
 
@@ -74,11 +76,16 @@ impl Config {
             nominatim_url,
             google_places_key,
             foursquare_key,
+            overture_file: env::var_os("NICASCAN_OVERTURE_FILE").map(std::path::PathBuf::from),
             user_agent,
             language: env::var("NICASCAN_LANGUAGE").unwrap_or_else(|_| "es".to_string()),
             http_timeout: Duration::from_secs(180),
             overpass_timeout: Duration::from_secs(240),
             nominatim_interval: Duration::from_millis(1_100),
+            enrich_delay_ms: env::var("NICASCAN_ENRICH_DELAY_MS")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(2_000),
             offline: env::var("NICASCAN_OFFLINE")
                 .map(|v| matches!(v.as_str(), "1" | "true" | "yes"))
                 .unwrap_or(false),

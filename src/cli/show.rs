@@ -62,6 +62,11 @@ fn print_human(full: &BusinessFull, theme: &Theme) {
             if b.source_count == 1 { "" } else { "s" }
         ),
     );
+    output::kv_line(
+        theme,
+        "Calidad",
+        &format!("{:.0}% de ficha completa", b.quality_score * 100.0),
+    );
     if let Some(value) = b.business_type.as_deref() {
         output::kv_line(theme, "Tipo", value);
     }

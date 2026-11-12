@@ -116,6 +116,7 @@ pub fn business_table(businesses: &[Business], _theme: &Theme, wide: bool) -> St
             Cell::new("Web/Redes"),
             Cell::new("Fuentes"),
             Cell::new("Conf."),
+            Cell::new("Calidad"),
         ]);
     } else {
         table.set_header(vec![
@@ -124,13 +125,14 @@ pub fn business_table(businesses: &[Business], _theme: &Theme, wide: bool) -> St
             Cell::new("Categoría"),
             Cell::new("Municipio"),
             Cell::new("Teléfono"),
-            Cell::new("Conf."),
+            Cell::new("Calidad"),
         ]);
     }
 
     for business in businesses {
         let id = crate::normalize::short_id(&business.id);
         let confidence = format!("{:.0}%", business.confidence * 100.0);
+        let quality = format!("{:.0}%", business.quality_score * 100.0);
         let category = business
             .primary_category
             .as_deref()
@@ -166,6 +168,7 @@ pub fn business_table(businesses: &[Business], _theme: &Theme, wide: bool) -> St
                 Cell::new(web.join(" · ")),
                 Cell::new(business.source_count.to_string()),
                 Cell::new(confidence),
+                Cell::new(quality),
             ]);
         } else {
             table.add_row(vec![
@@ -174,7 +177,7 @@ pub fn business_table(businesses: &[Business], _theme: &Theme, wide: bool) -> St
                 Cell::new(category),
                 Cell::new(location),
                 Cell::new(phone),
-                Cell::new(confidence),
+                Cell::new(quality),
             ]);
         }
     }

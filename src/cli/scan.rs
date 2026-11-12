@@ -1,6 +1,7 @@
 //! `nicascan scan`: consulta una o varias fuentes y guarda los negocios.
 
 use std::io::IsTerminal;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -45,6 +46,10 @@ pub struct ScanArgs {
     #[arg(long)]
     pub include_unnamed: bool,
 
+    /// Archivo GeoJSON/JSONL exportado de Overture Maps
+    #[arg(long)]
+    pub overture_file: Option<PathBuf>,
+
     /// Muestra lo que se encontró sin guardar
     #[arg(long)]
     pub dry_run: bool,
@@ -67,9 +72,13 @@ pub async fn run(
 
     let input = args.location.to_input();
     input.validate()?;
+    let mut scan_config = config.clone();
+    if let Some(path) = args.overture_file.clone() {
+        scan_config.overture_file = Some(path);
+    }
     let mut db = crate::cli::open_db(config)?;
-    let http = HttpClient::new(config)?;
-    let resolver = LocationResolver::new(config, http.clone());
+    let http = HttpClient::new(&scan_config)?;
+    let resolver = LocationResolver::new(&scan_config, http.clone());
 
     let cache_key = input.cache_key();
     let cached = if args.location.refresh_place {
@@ -113,20 +122,28 @@ pub async fn run(
         println!();
     }
 
-    if matches!(location.filter, GeoFilter::Country) && args.limit.is_none() && !global.quiet {
+    let requested = if args.source.trim().is_empty() {
+        if args.overture_file.is_some() {
+            vec![crate::providers::SOURCE_OVERTURE.to_string()]
+        } else {
+            Vec::new()
+        }
+    } else {
+        parse_sources(&args.source)
+    };
+    let providers = resolve_sources(&requested, &scan_config)?;
+    let provider_names: Vec<String> = providers.iter().map(|p| p.name().to_string()).collect();
+
+    if matches!(location.filter, GeoFilter::Country)
+        && args.limit.is_none()
+        && !global.quiet
+        && provider_names.iter().any(|name| name == "osm")
+    {
         eprintln!(
             "  {} Consulta de todo el país sin --limit: puede tardar y consumir mucha memoria en Overpass",
             theme.warning("!")
         );
     }
-
-    let requested = if args.source.trim().is_empty() {
-        Vec::new()
-    } else {
-        parse_sources(&args.source)
-    };
-    let providers = resolve_sources(&requested, config)?;
-    let provider_names: Vec<String> = providers.iter().map(|p| p.name().to_string()).collect();
 
     if human
         && provider_names
@@ -142,7 +159,7 @@ pub async fn run(
 
     let ctx = ProviderContext {
         http,
-        config: config.clone(),
+        config: scan_config.clone(),
     };
     let request = ProviderRequest {
         location: location.clone(),

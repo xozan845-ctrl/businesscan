@@ -133,6 +133,16 @@ impl Database {
         business::stats(&self.conn)
     }
 
+    /// Pares sospechosos de duplicado para revisión manual.
+    pub fn find_duplicates(
+        &self,
+        min_score: f64,
+        max_distance_m: f64,
+        limit: usize,
+    ) -> Result<Vec<crate::model::DuplicatePair>> {
+        business::find_duplicates(&self.conn, min_score, max_distance_m, limit)
+    }
+
     pub fn checkpoint(&self) -> Result<()> {
         self.conn
             .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;

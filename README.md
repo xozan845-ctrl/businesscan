@@ -31,8 +31,8 @@ quién ofrecerle qué servicio.
 ## Qué incluye
 
 - **Múltiples fuentes conectables**: OpenStreetMap/Overpass (sin clave), Google
-  Places (opcional, de pago), Foursquare Places (opcional) e importación de
-  CSV/JSON/JSONL.
+  Places (opcional, de pago), Foursquare Places (opcional), Overture Maps desde
+  un GeoJSON local e importación de CSV/JSON/JSONL.
 - **Búsqueda por ubicación**: país, departamento, municipio, barrio, comarca,
   radio alrededor de coordenadas o bounding box. La geocodificación usa
   Nominatim y se cachea.
@@ -47,7 +47,13 @@ quién ofrecerle qué servicio.
   vio y con qué confianza.
 - **SQLite portable**: un solo `.db`; búsqueda full-text con FTS5 y respaldo
   consistente con `VACUUM INTO`.
-- **Salidas para IA**: JSONL anidado, JSON, CSV plano y copia SQLite.
+- **Enriquecimiento web**: completa teléfonos, correos, direcciones y redes
+  desde el sitio del negocio, con JSON-LD, `mailto:`, `tel:`, `robots.txt` y
+  límites de velocidad.
+- **Calidad y revisión**: puntuación de ficha completa, detección de duplicados
+  no fusionados y `merge` manual.
+- **Salidas para IA**: JSONL anidado, JSON, CSV plano, copia SQLite y una **API
+  HTTP local** con OpenAPI.
 - **Termux primero**: pensado para compilarse y ejecutarse en Android sin
   servicios externos.
 
@@ -139,8 +145,12 @@ Cambia la ruta con `--db /ruta/negocios.db` o `NICASCAN_DB`.
 | `show` | Muestra todos los datos de un negocio por ID o prefijo único. |
 | `export` (`exportar`) | Exporta a JSONL, JSON, CSV o copia SQLite. |
 | `import` (`importar`) | Importa CSV/JSON/JSONL con encabezados en español o inglés. |
+| `enrich` | Completa fichas desde el sitio web del negocio. |
+| `duplicates` | Encuentra pares sospechosos que no se fusionaron. |
+| `merge` | Fusiona dos negocios manualmente (con `--yes`). |
+| `serve` | API HTTP local + OpenAPI para agentes de IA. |
 | `sources` | Lista fuentes, claves requeridas y disponibilidad. |
-| `stats` | Cobertura, distribución y últimas consultas. |
+| `stats` | Cobertura, calidad, distribución y últimas consultas. |
 | `places` | Geocodifica, lista o limpia la caché de ubicaciones. |
 | `db` | Info, backup, checkpoint, vacuum, optimize y reset. |
 
@@ -169,6 +179,10 @@ nicascan scan --all --limit 1000
 # Categoría y varias fuentes
 nicascan scan --departamento León --category ferreteria,restaurante \
   --source osm,google --limit 100
+
+# Overture Maps desde un extracto GeoJSON (ver docs/SOURCES.md)
+nicascan scan --all --source overture \
+  --overture-file overture-managua.geojson
 ```
 
 Opciones importantes:
@@ -239,9 +253,12 @@ procedencia. También importa JSON anidado con `contacts` y `address`.
 | `osm` | No | Gratis | Cobertura amplia, contactos, horarios, dirección, redes sociales. |
 | `google` | `GOOGLE_PLACES_API_KEY` | De pago / cuota | Rating, reseñas, horarios, atributos, tipos, estado. |
 | `foursquare` | `FOURSQUARE_API_KEY` | Plan gratuito limitado | Categorías, contacto, redes sociales, horarios, popularidad. |
+| `overture` | Archivo local | Gratis | Places de Overture desde un GeoJSON extraído con DuckDB. |
+| `web` | No | Gratis | Enriquecimiento desde el sitio oficial del negocio. |
 | `import` | No | Gratis | Datasets de MIFIC, cámaras, INE, planillas propias. |
 
-Por defecto se usan todas las fuentes **configuradas**; sin claves, solo OSM.
+Por defecto se usan todas las fuentes **configuradas** (OSM y Google/Foursquare
+si tienen clave). Overture es opt-in con `--source overture --overture-file`.
 Puedes forzar `--source osm` para evitar llamadas de pago.
 
 Más detalle de mapeo y políticas en [docs/SOURCES.md](docs/SOURCES.md).
@@ -259,7 +276,9 @@ Un negocio canónico tiene:
 - **Operación**: horario, rango de precio, rating, reseñas, estado.
 - **Procedencia**: una fila por observación (`source`, `external_id`, URL, JSON
   original, confianza, primera/última vez visto).
-- **Calidad**: `confidence`, `source_count`, fechas de creación/actualización.
+- **Calidad**: `confidence` (confianza de la fuente), `quality_score` (ficha
+  completa: contactos, web, dirección, coordenadas, horarios, redes, fuentes),
+  `source_count` y fechas de creación/actualización.
 
 ### Deduplicación
 
@@ -275,6 +294,27 @@ contactos, categorías y etiquetas, y no pierde la observación de cada fuente.
 Los cajeros, sucursales y cadenas con el mismo nombre pero direcciones distintas
 no se fusionan si no comparten teléfono/web/cercanía.
 
+Para revisar lo que quedó pendiente:
+
+```bash
+nicascan duplicates --min-score 0.75
+nicascan show <id>
+nicascan merge <id_que_conservas> <id_absorbido> --yes
+```
+
+### Enriquecimiento web
+
+```bash
+nicascan enrich --source osm --limit 25
+nicascan enrich --departamento León --missing-only --dry-run
+nicascan enrich --refresh --limit 10
+```
+
+Lee la portada y hasta `--max-pages` páginas de contacto/nosotros. Extrae
+JSON-LD `LocalBusiness`, metaetiquetas, enlaces `mailto:`/`tel:`, WhatsApp y
+redes. Respeta `robots.txt`, espera 2 s por host por defecto y bloquea IPs
+privadas (SSRF).
+
 ## Variables de entorno
 
 | Variable | Uso |
@@ -287,6 +327,9 @@ no se fusionan si no comparten teléfono/web/cercanía.
 | `FOURSQUARE_API_KEY` | Activa Foursquare. |
 | `NICASCAN_LANGUAGE` | Idioma de consultas (por defecto `es`). |
 | `NICASCAN_OFFLINE` | `1` evita llamadas de red. |
+| `NICASCAN_OVERTURE_FILE` | GeoJSON/JSONL de Overture. |
+| `NICASCAN_ENRICH_DELAY_MS` | Pausa por host al enriquecer (por defecto 2000). |
+| `NICASCAN_API_TOKEN` | Token Bearer para `nicascan serve`. |
 | `RUST_LOG` / `-v` / `-vv` | Nivel de logs en stderr. |
 
 Copia [`.env.example`](.env.example) como referencia; la CLI **no** carga `.env`
@@ -304,6 +347,38 @@ nicascan db backup salida.db  # copia consistente (VACUUM INTO)
 
 También puedes copiar el `.db` con la aplicación cerrada. `db backup` es la
 forma recomendada si hay escrituras concurrentes.
+
+## API local para IA
+
+```bash
+nicascan serve --port 8787
+# o con token si vas a escuchar fuera de loopback
+NICASCAN_API_TOKEN=secreto nicascan serve --host 0.0.0.0
+```
+
+Endpoints:
+
+| Método | Ruta | Uso |
+|---|---|---|
+| GET | `/v1/health` | Estado del servicio. |
+| GET | `/v1/businesses` | Lista con los mismos filtros de `search`. |
+| GET | `/v1/businesses/{id}` | Ficha completa (acepta prefijo corto). |
+| POST | `/v1/search` | Búsqueda por JSON. |
+| GET | `/v1/export` | JSONL para streaming. |
+| GET | `/v1/stats` | Cobertura y calidad. |
+| GET | `/v1/sources` | Fuentes configuradas. |
+| GET | `/openapi.json` | Especificación OpenAPI mínima. |
+
+Ejemplo:
+
+```bash
+curl "http://127.0.0.1:8787/v1/businesses?q=farmacia&has_phone=true&limit=5"
+curl -X POST http://127.0.0.1:8787/v1/search \
+  -H 'Content-Type: application/json' \
+  -d '{"departamento":"León","min_quality":0.6,"limit":20}'
+```
+
+Si defines `NICASCAN_API_TOKEN`, envía `Authorization: Bearer <token>`.
 
 ## Para alimentar una IA
 
@@ -371,10 +446,12 @@ make dist
 - [x] Google Places y Foursquare opcionales.
 - [x] Importación CSV/JSON/JSONL y exportación para IA.
 - [x] Termux/Linux/macOS/Windows.
-- [ ] Enriquecimiento respetuoso desde sitios web (JSON-LD, `mailto:`, `tel:`).
-- [ ] Fuente Overture Maps y datasets oficiales adicionales.
-- [ ] API local para agentes (`nicascan serve`).
-- [ ] Panel de revisión de duplicados y calidad.
+- [x] Enriquecimiento respetuoso desde sitios web (JSON-LD, `mailto:`, `tel:`).
+- [x] Fuente Overture Maps desde GeoJSON local.
+- [x] API local para agentes (`nicascan serve`).
+- [x] Calidad de ficha, revisión de duplicados y fusión manual.
+- [ ] Descarga/extracción automática de Overture desde S3.
+- [ ] Panel web de revisión.
 
 ## Licencia
 

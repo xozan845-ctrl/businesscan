@@ -48,6 +48,11 @@ pub fn run(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i32> {
     }
     println!();
     output::kv_line(theme, "Total negocios", &stats.total_businesses.to_string());
+    output::kv_line(
+        theme,
+        "Calidad media",
+        &format!("{:.0}%", stats.avg_quality * 100.0),
+    );
     println!();
 
     print_counts(theme, "Por departamento", &stats.by_departamento);

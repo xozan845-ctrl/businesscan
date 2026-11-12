@@ -5,6 +5,7 @@ pub mod foursquare;
 pub mod google;
 pub mod import;
 pub mod overpass;
+pub mod overture;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -17,6 +18,7 @@ use crate::model::BusinessRecord;
 pub const SOURCE_OSM: &str = "osm";
 pub const SOURCE_GOOGLE: &str = "google";
 pub const SOURCE_FOURSQUARE: &str = "foursquare";
+pub const SOURCE_OVERTURE: &str = "overture";
 
 #[derive(Clone)]
 pub struct ProviderContext {
@@ -70,6 +72,10 @@ pub trait Provider: Send + Sync {
         None
     }
     fn is_available(&self, config: &Config) -> bool;
+    /// Si se incluye cuando no se pide `--source` explícitamente.
+    fn default_enabled(&self) -> bool {
+        true
+    }
     async fn fetch(
         &self,
         ctx: &ProviderContext,
@@ -82,6 +88,7 @@ pub fn provider_by_name(name: &str) -> Option<Box<dyn Provider>> {
         SOURCE_OSM => Some(Box::new(overpass::OverpassProvider)),
         SOURCE_GOOGLE => Some(Box::new(google::GooglePlacesProvider)),
         SOURCE_FOURSQUARE => Some(Box::new(foursquare::FoursquareProvider)),
+        SOURCE_OVERTURE => Some(Box::new(overture::OvertureProvider)),
         _ => None,
     }
 }
@@ -91,6 +98,7 @@ pub fn all_providers() -> Vec<Box<dyn Provider>> {
         Box::new(overpass::OverpassProvider),
         Box::new(google::GooglePlacesProvider),
         Box::new(foursquare::FoursquareProvider),
+        Box::new(overture::OvertureProvider),
     ]
 }
 
@@ -103,6 +111,7 @@ pub fn parse_sources(value: &str) -> Vec<String> {
             "openstreetmap" | "open-street-map" | "overpass" => SOURCE_OSM.to_string(),
             "google-places" | "google_places" | "places" => SOURCE_GOOGLE.to_string(),
             "fsq" | "4sq" => SOURCE_FOURSQUARE.to_string(),
+            "overture-maps" | "overturemaps" => SOURCE_OVERTURE.to_string(),
             other => other.to_lowercase(),
         })
         .collect()
@@ -112,7 +121,7 @@ pub fn resolve_sources(requested: &[String], config: &Config) -> Result<Vec<Box<
     let names: Vec<String> = if requested.is_empty() {
         all_providers()
             .into_iter()
-            .filter(|p| p.is_available(config))
+            .filter(|p| p.is_available(config) && p.default_enabled())
             .map(|p| p.name().to_string())
             .collect()
     } else {
@@ -125,8 +134,15 @@ pub fn resolve_sources(requested: &[String], config: &Config) -> Result<Vec<Box<
             bail!("Fuente desconocida: «{name}». Usa `nicascan sources` para ver las disponibles");
         };
         if !provider.is_available(config) {
-            let env = provider.key_env().unwrap_or("la variable de entorno");
-            bail!("La fuente «{name}» requiere una clave de API. Define {env} y vuelve a intentar");
+            if provider.requires_key() {
+                let env = provider.key_env().unwrap_or("la variable de entorno");
+                bail!(
+                    "La fuente «{name}» requiere una clave de API. Define {env} y vuelve a intentar"
+                );
+            }
+            bail!(
+                "La fuente «{name}» no está configurada. Para Overture usa --overture-file <archivo.geojson>"
+            );
         }
         providers.push(provider);
     }

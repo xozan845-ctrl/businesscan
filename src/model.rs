@@ -285,6 +285,7 @@ pub struct Business {
     pub review_count: Option<i64>,
     pub source_count: i64,
     pub confidence: f64,
+    pub quality_score: f64,
     pub first_seen_at: String,
     pub last_seen_at: String,
     pub updated_at: String,
@@ -405,6 +406,7 @@ pub enum SortBy {
     Relevance,
     Name,
     Confidence,
+    Quality,
     Updated,
     Distance,
 }
@@ -422,6 +424,7 @@ pub struct SearchQuery {
     pub has_email: bool,
     pub has_website: bool,
     pub min_confidence: Option<f64>,
+    pub min_quality: Option<f64>,
     pub updated_since: Option<String>,
     pub lat: Option<f64>,
     pub lon: Option<f64>,
@@ -473,6 +476,7 @@ pub struct Stats {
     pub with_website: i64,
     pub with_coordinates: i64,
     pub with_address: i64,
+    pub avg_quality: f64,
     pub by_departamento: Vec<CountRow>,
     pub by_category: Vec<CountRow>,
     pub by_source: Vec<CountRow>,
@@ -498,4 +502,45 @@ pub struct ScanLogRow {
     pub inserted: i64,
     pub merged: i64,
     pub errors: Option<String>,
+}
+
+/// Vista resumida para la revisión de duplicados.
+#[derive(Debug, Clone, Serialize)]
+pub struct DuplicateBusiness {
+    pub id: String,
+    pub name: String,
+    pub primary_category: Option<String>,
+    pub phone_primary: Option<String>,
+    pub website: Option<String>,
+    pub municipio: Option<String>,
+    pub departamento: Option<String>,
+    pub quality_score: f64,
+    pub confidence: f64,
+    pub source_count: i64,
+}
+
+impl From<&Business> for DuplicateBusiness {
+    fn from(business: &Business) -> Self {
+        Self {
+            id: business.id.clone(),
+            name: business.name.clone(),
+            primary_category: business.primary_category.clone(),
+            phone_primary: business.phone_primary.clone(),
+            website: business.website.clone(),
+            municipio: business.address.municipio.clone(),
+            departamento: business.address.departamento.clone(),
+            quality_score: business.quality_score,
+            confidence: business.confidence,
+            source_count: business.source_count,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DuplicatePair {
+    pub left: DuplicateBusiness,
+    pub right: DuplicateBusiness,
+    pub score: f64,
+    pub distance_m: Option<f64>,
+    pub reasons: Vec<String>,
 }

@@ -6,7 +6,7 @@
 use anyhow::{Context, Result};
 use rusqlite::Connection;
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 const BASE_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS businesses (
     review_count        INTEGER,
     source_count        INTEGER NOT NULL DEFAULT 0,
     confidence          REAL NOT NULL DEFAULT 0.5,
+    quality_score       REAL NOT NULL DEFAULT 0,
     first_seen_at       TEXT NOT NULL,
     last_seen_at        TEXT NOT NULL,
     updated_at          TEXT NOT NULL,
@@ -67,6 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_businesses_website_domain ON businesses(website_d
 CREATE INDEX IF NOT EXISTS idx_businesses_phone ON businesses(phone_primary);
 CREATE INDEX IF NOT EXISTS idx_businesses_updated ON businesses(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_businesses_confidence ON businesses(confidence DESC);
+CREATE INDEX IF NOT EXISTS idx_businesses_quality ON businesses(quality_score DESC);
 
 CREATE TABLE IF NOT EXISTS contacts (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,7 +185,7 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
         );
     }
 
-    if current < SCHEMA_VERSION {
+    if current == 0 {
         let tx = conn.transaction()?;
         tx.execute_batch(BASE_SCHEMA)
             .context("No se pudo crear el esquema de la base")?;
@@ -194,6 +196,18 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
             [],
         )?;
         tx.commit()?;
+    } else if current < 2 {
+        // v1 → v2: puntuación de calidad almacenada y ordenable.
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "ALTER TABLE businesses ADD COLUMN quality_score REAL NOT NULL DEFAULT 0;
+             CREATE INDEX IF NOT EXISTS idx_businesses_quality
+                 ON businesses(quality_score DESC);",
+        )
+        .context("No se pudo migrar la base a v2")?;
+        tx.pragma_update(None, "user_version", 2)?;
+        tx.commit()?;
+        super::business::recompute_all_quality(conn)?;
     }
 
     // FTS5 puede no estar disponible en SQLite compilado a medida. Si falla,

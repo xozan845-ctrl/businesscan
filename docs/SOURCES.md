@@ -92,6 +92,67 @@ un nombre sintético). No se inventan teléfonos ni correos.
 - El rating original 0–10 se conserva también en
   `foursquare.rating_10` dentro de etiquetas.
 
+## Overture Maps (GeoJSON local)
+
+Overture publica `theme=places/type=place` como GeoParquet en
+`s3://overturemaps-us-west-2/release/...`. NicaScan no descarga el planeta:
+lee un **extracto GeoJSON/JSONL** ya filtrado por tu zona.
+
+Extracción típica con DuckDB (requiere extensión `spatial` y acceso a S3):
+
+```sql
+INSTALL spatial; LOAD spatial;
+COPY (
+  SELECT *
+  FROM read_parquet('s3://overturemaps-us-west-2/release/*/theme=places/type=place/*.parquet')
+  WHERE bbox.xmin BETWEEN -86.60 AND -86.10
+    AND bbox.ymin BETWEEN 12.00 AND 12.35
+) TO 'overture-managua.geojson' WITH (FORMAT GDAL, DRIVER 'GeoJSON');
+```
+
+Luego:
+
+```bash
+nicascan scan --all --source overture --overture-file overture-managua.geojson
+```
+
+Mapeo:
+
+| Campo | Propiedad Overture |
+|---|---|
+| Nombre | `names.primary` o `names.common` |
+| Alias | `names.common`, `brand.names.primary` |
+| Categorías | `categories.primary`, `categories.alternate` |
+| Confianza | `confidence` |
+| Teléfonos | `phones` |
+| Correos | `emails` |
+| Webs | `websites` |
+| Redes | `socials` |
+| Dirección | `addresses[0]` (`freeform`, `locality`, `region`, `postcode`, `country`) |
+| Estado | `operating_status` |
+| Coordenadas | `geometry` (Point) |
+
+El proveedor aplica el bbox/radio de la ubicación resuelta y filtra por
+categoría/texto. Overture es opt-in (`--source overture`) para no mezclar
+automáticamente extractos locales con un escaneo normal. Revisa la licencia
+CDLA-Permissive 2.0 de Overture y las atribuciones de sus fuentes.
+
+## Enriquecimiento web (`source=web`)
+
+`nicascan enrich` visita el sitio del negocio y añade una observación con
+`source='web'`:
+
+- JSON-LD `LocalBusiness`/`Restaurant`/`Store`/`Organization`: nombre, teléfono,
+  correo, URL, `sameAs`, `PostalAddress`, `geo`, horarios, precio, rating.
+- Metaetiquetas Open Graph y `business:contact_data:*`.
+- Enlaces `mailto:`, `tel:`, `wa.me`, WhatsApp y redes.
+- Correos sueltos y teléfonos `+505` en el HTML, con listas de ruido.
+
+Límites: `robots.txt` por origen (si no se puede leer, se omite el sitio),
+`Crawl-delay`, pausa de 2 s por host, máximo 2 MB por página, solo HTTP/HTTPS y
+bloqueo de IPs privadas. Configura la pausa con `NICASCAN_ENRICH_DELAY_MS`.
+La confianza de una observación web es 0.55–0.78 según JSON-LD y contactos.
+
 ## Importación CSV/JSON/JSONL
 
 - **Formato**: se detecta por extensión o `--format`.
@@ -136,11 +197,9 @@ misma celda también aceptan ` / `.
 
 ## Fuentes futuras
 
-- **Overture Maps** (Places): requiere leer GeoParquet por bbox; muy útil para
-  cobertura comercial, pero pesado para un MVP.
+- **Descarga automática de Overture** desde S3 por bbox (hoy se hace con DuckDB
+  y se pasa el GeoJSON).
 - **Portales oficiales** (MIFIC, INE, cámaras): se integran hoy vía `import`.
-- **Enriquecimiento web**: extraer JSON-LD (`LocalBusiness`), `mailto:`,
-  `tel:` y redes desde el sitio del negocio, respetando `robots.txt`.
 - **Directorios locales**: solo si sus términos permiten el acceso; se puede
   implementar un proveedor con rate limit y caché.
 

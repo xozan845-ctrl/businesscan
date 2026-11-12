@@ -1,4 +1,4 @@
-use nicascan::db::business::{get_full, import_batch, search};
+use nicascan::db::business::{get_full, import_batch, merge_businesses, search};
 use nicascan::db::Database;
 use nicascan::model::{BusinessRecord, Contact, ContactKind, SearchQuery, SortBy};
 use nicascan::normalize::normalize_phone;
@@ -49,6 +49,12 @@ fn insert_and_search_by_accent_insensitive_text() {
     assert_eq!(results[0].phone_primary.as_deref(), Some("+50588887777"));
     assert_eq!(results[0].website.as_deref(), Some("https://elsabor.ni"));
     assert!(results[0].address.barrio.is_some());
+    assert!(results[0].quality_score > 0.5);
+    let strict = SearchQuery {
+        min_quality: Some(0.99),
+        ..Default::default()
+    };
+    assert!(search(&db, &strict).unwrap().is_empty());
 }
 
 #[test]
@@ -156,4 +162,45 @@ fn normalizes_phones_for_storage() {
         normalize_phone("(505) 8888-7777").as_deref(),
         Some("+50588887777")
     );
+}
+
+#[test]
+fn finds_and_merges_manual_duplicates() {
+    let mut db = Database::open_memory().unwrap();
+    let mut a = record("import", "a", "Farmacia Duplicada");
+    a.address.barrio = Some("Barrio A".into());
+    a.address.line = Some("Calle Uno 10".into());
+    a.latitude = Some(12.10);
+    a.longitude = Some(-86.20);
+    a.contacts.push(
+        Contact::new(ContactKind::Phone, "2222-1000")
+            .with_source("import")
+            .primary(),
+    );
+    let mut b = record("import", "b", "Farmacia Duplicada");
+    b.address.barrio = Some("Barrio B".into());
+    b.address.line = Some("Calle Dos 20".into());
+    b.latitude = Some(12.11);
+    b.longitude = Some(-86.21);
+    b.contacts.push(
+        Contact::new(ContactKind::Phone, "2222-2000")
+            .with_source("import")
+            .primary(),
+    );
+    let results = import_batch(&mut db, &[a, b]).unwrap();
+    assert_eq!(results.len(), 2);
+    assert_ne!(results[0].id, results[1].id);
+
+    let pairs = db.find_duplicates(0.4, 5_000.0, 10).unwrap();
+    assert_eq!(pairs.len(), 1, "debe detectar el par no fusionado");
+
+    let kept = merge_businesses(&mut db, &results[0].id, &results[1].id).unwrap();
+    assert_eq!(kept, results[0].id);
+    let remaining = search(&db, &SearchQuery::default()).unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert!(remaining[0].quality_score > 0.4);
+
+    let full = get_full(&db, &kept, false).unwrap();
+    assert_eq!(full.contacts.len(), 2);
+    assert_eq!(full.sources.len(), 2);
 }

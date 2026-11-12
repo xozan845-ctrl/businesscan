@@ -1,6 +1,6 @@
 //! Repositorio de negocios: inserción, fusión de duplicados y búsqueda.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::{bail, Context, Result};
 use chrono::{SecondsFormat, Utc};
@@ -12,8 +12,9 @@ use ulid::Ulid;
 use crate::db::schema;
 use crate::db::Database;
 use crate::model::{
-    Address, Business, BusinessFull, BusinessRecord, Contact, ContactKind, CountRow, MatchReason,
-    ScanLogRow, SearchQuery, SortBy, SourceRecord, Stats, UpsertAction, UpsertResult,
+    Address, Business, BusinessFull, BusinessRecord, Contact, ContactKind, CountRow,
+    DuplicateBusiness, DuplicatePair, MatchReason, ScanLogRow, SearchQuery, SortBy, SourceRecord,
+    Stats, UpsertAction, UpsertResult,
 };
 use crate::normalize::{
     domain_of, fts_query, geohash, haversine_m, normalize_email, normalize_name_for_match,
@@ -29,8 +30,8 @@ const BUSINESS_COLUMNS: &str = "b.id, b.name, b.name_norm, b.legal_name, b.descr
 b.primary_category, b.business_type, b.status, b.phone_primary, b.email_primary, b.website, \
 b.address_line, b.street, b.house_number, b.barrio, b.comarca, b.municipio, b.departamento, \
 b.country_code, b.postal_code, b.latitude, b.longitude, b.geohash, b.opening_hours, \
-b.price_range, b.rating, b.review_count, b.source_count, b.confidence, b.first_seen_at, \
-b.last_seen_at, b.updated_at, b.extra_json";
+b.price_range, b.rating, b.review_count, b.source_count, b.confidence, b.quality_score, \
+b.first_seen_at, b.last_seen_at, b.updated_at, b.extra_json";
 
 /// Importa un lote dentro de una sola transacción.
 pub fn import_batch(db: &mut Database, records: &[BusinessRecord]) -> Result<Vec<UpsertResult>> {
@@ -41,6 +42,32 @@ pub fn import_batch(db: &mut Database, records: &[BusinessRecord]) -> Result<Vec
     }
     tx.commit()?;
     Ok(results)
+}
+
+/// Añade una observación a un negocio ya identificado (p. ej. enriquecimiento
+/// web), sin volver a ejecutar la búsqueda de duplicados.
+pub fn add_observation(
+    db: &mut Database,
+    business_id: &str,
+    record: &BusinessRecord,
+) -> Result<()> {
+    let tx = db.conn.transaction()?;
+    merge_into(&tx, business_id, record)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Fecha de la última observación web de un negocio, si existe.
+pub fn web_last_seen(conn: &Connection, business_id: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT MAX(last_seen_at) FROM business_sources
+             WHERE business_id=?1 AND source='web'",
+            [business_id],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .optional()?
+        .flatten())
 }
 
 fn upsert_tx(tx: &Transaction<'_>, record: &BusinessRecord) -> Result<UpsertResult> {
@@ -284,6 +311,7 @@ fn insert_new(conn: &Connection, record: &BusinessRecord) -> Result<String> {
     insert_related(conn, &id, record, &record.name)?;
     insert_source(conn, &id, record)?;
     update_source_count(conn, &id)?;
+    update_quality(conn, &id)?;
     refresh_fts(conn, &id)?;
     Ok(id)
 }
@@ -396,6 +424,7 @@ fn merge_into(conn: &Connection, id: &str, record: &BusinessRecord) -> Result<()
     insert_source(conn, id, record)?;
     update_source_count(conn, id)?;
     update_confidence(conn, id)?;
+    update_quality(conn, id)?;
     refresh_fts(conn, id)?;
     Ok(())
 }
@@ -641,6 +670,48 @@ fn update_confidence(conn: &Connection, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Puntuación 0..1 de qué tan completa y confiable es la ficha.
+/// No sustituye la confianza de la fuente: mide completitud + corroboración.
+fn update_quality(conn: &Connection, id: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE businesses SET quality_score = MIN(1.0,
+            0.25 * confidence
+            + CASE WHEN EXISTS (SELECT 1 FROM contacts c WHERE c.business_id=?1
+                     AND c.kind IN ('phone','mobile','whatsapp')) THEN 0.15 ELSE 0 END
+            + CASE WHEN EXISTS (SELECT 1 FROM contacts c WHERE c.business_id=?1
+                     AND c.kind='email') THEN 0.10 ELSE 0 END
+            + CASE WHEN website IS NOT NULL THEN 0.10 ELSE 0 END
+            + CASE WHEN (address_line IS NOT NULL OR street IS NOT NULL
+                     OR barrio IS NOT NULL OR municipio IS NOT NULL) THEN 0.10 ELSE 0 END
+            + CASE WHEN latitude IS NOT NULL AND longitude IS NOT NULL THEN 0.10 ELSE 0 END
+            + CASE WHEN opening_hours IS NOT NULL THEN 0.05 ELSE 0 END
+            + CASE WHEN description IS NOT NULL AND length(description) >= 20 THEN 0.05 ELSE 0 END
+            + CASE WHEN primary_category IS NOT NULL THEN 0.03 ELSE 0 END
+            + CASE WHEN rating IS NOT NULL THEN 0.03 ELSE 0 END
+            + CASE WHEN EXISTS (SELECT 1 FROM contacts c WHERE c.business_id=?1
+                     AND c.kind IN ('facebook','instagram','tiktok','twitter','telegram',
+                                    'linkedin','youtube')) THEN 0.04 ELSE 0 END
+            + MIN(0.05, 0.025 * MAX(0, source_count - 1))
+         ) WHERE id=?1",
+        [id],
+    )?;
+    Ok(())
+}
+
+pub fn recompute_all_quality(conn: &Connection) -> Result<()> {
+    let ids: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT id FROM businesses")?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        rows
+    };
+    for id in ids {
+        update_quality(conn, &id)?;
+    }
+    Ok(())
+}
+
 pub fn refresh_fts(conn: &Connection, id: &str) -> Result<()> {
     if !schema::fts_available(conn) {
         return Ok(());
@@ -787,7 +858,7 @@ pub fn load_business(conn: &Connection, id: &str) -> Result<Option<Business>> {
 }
 
 fn map_business(row: &rusqlite::Row<'_>) -> rusqlite::Result<Business> {
-    let extra_raw: String = row.get(32)?;
+    let extra_raw: String = row.get(33)?;
     let extra = serde_json::from_str(&extra_raw).unwrap_or(JsonValue::Null);
     Ok(Business {
         id: row.get(0)?,
@@ -821,9 +892,10 @@ fn map_business(row: &rusqlite::Row<'_>) -> rusqlite::Result<Business> {
         review_count: row.get(26)?,
         source_count: row.get(27)?,
         confidence: row.get(28)?,
-        first_seen_at: row.get(29)?,
-        last_seen_at: row.get(30)?,
-        updated_at: row.get(31)?,
+        quality_score: row.get(29)?,
+        first_seen_at: row.get(30)?,
+        last_seen_at: row.get(31)?,
+        updated_at: row.get(32)?,
         extra,
         distance_m: None,
     })
@@ -949,6 +1021,10 @@ pub fn search(db: &Database, query: &SearchQuery) -> Result<Vec<Business>> {
         where_parts.push("b.confidence >= ?".to_string());
         values.push(Value::Real(min));
     }
+    if let Some(min) = query.min_quality {
+        where_parts.push("b.quality_score >= ?".to_string());
+        values.push(Value::Real(min));
+    }
     if let Some(since) = query.updated_since.as_deref().filter(|v| !v.is_empty()) {
         where_parts.push("b.updated_at >= ?".to_string());
         values.push(Value::Text(since.to_string()));
@@ -977,6 +1053,9 @@ pub fn search(db: &Database, query: &SearchQuery) -> Result<Vec<Business>> {
     let order = match query.sort {
         SortBy::Name => "b.name COLLATE NOCASE ASC".to_string(),
         SortBy::Confidence => "b.confidence DESC, b.name COLLATE NOCASE ASC".to_string(),
+        SortBy::Quality => {
+            "b.quality_score DESC, b.confidence DESC, b.name COLLATE NOCASE ASC".to_string()
+        }
         SortBy::Updated => "b.updated_at DESC, b.name COLLATE NOCASE ASC".to_string(),
         SortBy::Distance => "b.confidence DESC, b.name COLLATE NOCASE ASC".to_string(),
         SortBy::Relevance => {
@@ -1254,6 +1333,11 @@ pub fn stats(conn: &Connection) -> Result<Stats> {
          WHERE address_line IS NOT NULL OR street IS NOT NULL OR barrio IS NOT NULL
             OR municipio IS NOT NULL OR departamento IS NOT NULL",
     )?;
+    let avg_quality: f64 = conn.query_row(
+        "SELECT COALESCE(AVG(quality_score), 0) FROM businesses",
+        [],
+        |row| row.get(0),
+    )?;
 
     let by_departamento = count_rows(
         conn,
@@ -1305,6 +1389,7 @@ pub fn stats(conn: &Connection) -> Result<Stats> {
         with_website,
         with_coordinates,
         with_address,
+        avg_quality,
         by_departamento,
         by_category,
         by_source,
@@ -1328,4 +1413,339 @@ fn count_rows(conn: &Connection, sql: &str) -> Result<Vec<CountRow>> {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
+}
+
+// ── Revisión y fusión manual de duplicados ──────────────────────────────────
+
+/// Fusiona `other_id` dentro de `keep_id`, moviendo contactos, etiquetas,
+/// categorías y observaciones, y conservando la información más completa.
+pub fn merge_businesses(db: &mut Database, keep_input: &str, other_input: &str) -> Result<String> {
+    let tx = db.conn.transaction()?;
+    let keep_id = resolve_id(&tx, keep_input)?;
+    let other_id = resolve_id(&tx, other_input)?;
+    if keep_id == other_id {
+        bail!("Los dos IDs apuntan al mismo negocio");
+    }
+    let keep =
+        load_business(&tx, &keep_id)?.with_context(|| format!("No existe el negocio {keep_id}"))?;
+    let other = load_business(&tx, &other_id)?
+        .with_context(|| format!("No existe el negocio {other_id}"))?;
+
+    // El nombre del negocio absorbido pasa a ser alias.
+    let other_name_norm = normalize_text(&other.name);
+    if other_name_norm != keep.name_norm && !other_name_norm.is_empty() {
+        tx.execute(
+            "INSERT OR IGNORE INTO business_aliases(business_id, alias, alias_norm, source)
+             VALUES (?1, ?2, ?3, 'merge')",
+            params![keep_id, other.name, other_name_norm],
+        )?;
+    }
+
+    tx.execute(
+        "INSERT OR IGNORE INTO contacts(
+            business_id, kind, value, normalized, match_key, label, is_primary, source, created_at)
+         SELECT ?1, kind, value, normalized, match_key, label, is_primary, source, created_at
+         FROM contacts WHERE business_id=?2",
+        params![keep_id, other_id],
+    )?;
+    tx.execute("DELETE FROM contacts WHERE business_id=?1", [&other_id])?;
+
+    tx.execute(
+        "INSERT OR IGNORE INTO business_aliases(business_id, alias, alias_norm, source)
+         SELECT ?1, alias, alias_norm, source FROM business_aliases WHERE business_id=?2",
+        params![keep_id, other_id],
+    )?;
+    tx.execute(
+        "DELETE FROM business_aliases WHERE business_id=?1",
+        [&other_id],
+    )?;
+
+    tx.execute(
+        "INSERT OR IGNORE INTO business_categories(
+            business_id, category, category_norm, source)
+         SELECT ?1, category, category_norm, source
+         FROM business_categories WHERE business_id=?2",
+        params![keep_id, other_id],
+    )?;
+    tx.execute(
+        "DELETE FROM business_categories WHERE business_id=?1",
+        [&other_id],
+    )?;
+
+    tx.execute(
+        "INSERT OR IGNORE INTO business_tags(business_id, key, value, source)
+         SELECT ?1, key, value, source FROM business_tags WHERE business_id=?2",
+        params![keep_id, other_id],
+    )?;
+    tx.execute(
+        "DELETE FROM business_tags WHERE business_id=?1",
+        [&other_id],
+    )?;
+
+    tx.execute(
+        "INSERT OR IGNORE INTO business_sources(
+            business_id, source, external_id, source_url, raw_json, confidence,
+            fetched_at, first_seen_at, last_seen_at)
+         SELECT ?1, source, external_id, source_url, raw_json, confidence,
+                fetched_at, first_seen_at, last_seen_at
+         FROM business_sources WHERE business_id=?2",
+        params![keep_id, other_id],
+    )?;
+    tx.execute(
+        "DELETE FROM business_sources WHERE business_id=?1",
+        [&other_id],
+    )?;
+
+    let name = if keep.name.trim().is_empty() {
+        other.name.clone()
+    } else {
+        keep.name.clone()
+    };
+    let name_norm = normalize_text(&name);
+    let match_name = normalize_name_for_match(&name);
+    let description = prefer_longer(keep.description.clone(), other.description.clone());
+    let opening_hours = prefer_longer(keep.opening_hours.clone(), other.opening_hours.clone());
+    let (rating, review_count) = prefer_rating(&keep, other.rating, other.review_count);
+    let status = match (keep.status.as_deref(), other.status.as_deref()) {
+        (Some("closed"), _) => Some("closed".to_string()),
+        (_, Some("closed")) => Some("closed".to_string()),
+        (Some(value), _) => Some(value.to_string()),
+        (None, Some(value)) => Some(value.to_string()),
+        (None, None) => None,
+    };
+    let address = merge_address(&keep.address, &other.address);
+    let website = keep.website.clone().or_else(|| other.website.clone());
+    let website_domain = website.as_deref().and_then(domain_of);
+    let phone_primary = keep
+        .phone_primary
+        .clone()
+        .or_else(|| other.phone_primary.clone());
+    let email_primary = keep
+        .email_primary
+        .clone()
+        .or_else(|| other.email_primary.clone());
+    let latitude = keep.latitude.or(other.latitude);
+    let longitude = keep.longitude.or(other.longitude);
+    let geohash_value = match (latitude, longitude) {
+        (Some(lat), Some(lon)) => Some(geohash(lat, lon, 9)),
+        _ => None,
+    };
+    let country_code = address
+        .country_code
+        .clone()
+        .or_else(|| keep.address.country_code.clone())
+        .unwrap_or_else(|| "NI".to_string());
+    let first_seen_at = if keep.first_seen_at <= other.first_seen_at {
+        keep.first_seen_at.clone()
+    } else {
+        other.first_seen_at.clone()
+    };
+    let last_seen_at = if keep.last_seen_at >= other.last_seen_at {
+        keep.last_seen_at.clone()
+    } else {
+        other.last_seen_at.clone()
+    };
+    let now_value = now();
+
+    tx.execute(
+        "UPDATE businesses SET
+            name=?1, name_norm=?2, match_name=?3,
+            legal_name=COALESCE(legal_name, ?4),
+            description=?5,
+            primary_category=COALESCE(primary_category, ?6),
+            business_type=COALESCE(business_type, ?7),
+            status=?8, phone_primary=?9, email_primary=?10, website=?11,
+            website_domain=?12, address_line=?13, street=?14, house_number=?15,
+            barrio=?16, barrio_norm=?17, comarca=?18, comarca_norm=?19,
+            municipio=?20, municipio_norm=?21, departamento=?22, departamento_norm=?23,
+            country_code=?24, postal_code=?25, latitude=?26, longitude=?27,
+            geohash=?28, opening_hours=?29, price_range=COALESCE(price_range, ?30),
+            rating=?31, review_count=?32,
+            first_seen_at=?33, last_seen_at=?34, updated_at=?35
+         WHERE id=?36",
+        params![
+            name,
+            name_norm,
+            match_name,
+            keep.legal_name.clone().or_else(|| other.legal_name.clone()),
+            description,
+            keep.primary_category
+                .clone()
+                .or_else(|| other.primary_category.clone()),
+            keep.business_type
+                .clone()
+                .or_else(|| other.business_type.clone()),
+            status,
+            phone_primary,
+            email_primary,
+            website,
+            website_domain,
+            address.line,
+            address.street,
+            address.house_number,
+            address.barrio,
+            normalize_text(address.barrio.as_deref().unwrap_or("")),
+            address.comarca,
+            normalize_text(address.comarca.as_deref().unwrap_or("")),
+            address.municipio,
+            normalize_text(address.municipio.as_deref().unwrap_or("")),
+            address.departamento,
+            normalize_text(address.departamento.as_deref().unwrap_or("")),
+            country_code,
+            address.postal_code,
+            latitude,
+            longitude,
+            geohash_value,
+            opening_hours,
+            keep.price_range
+                .clone()
+                .or_else(|| other.price_range.clone()),
+            rating,
+            review_count,
+            first_seen_at,
+            last_seen_at,
+            now_value,
+            keep_id,
+        ],
+    )?;
+
+    if schema::fts_available(&tx) {
+        tx.execute(
+            "DELETE FROM businesses_fts WHERE business_id IN (?1, ?2)",
+            params![keep_id, other_id],
+        )?;
+    }
+    tx.execute("DELETE FROM businesses WHERE id=?1", [&other_id])?;
+
+    update_source_count(&tx, &keep_id)?;
+    update_confidence(&tx, &keep_id)?;
+    update_quality(&tx, &keep_id)?;
+    refresh_fts(&tx, &keep_id)?;
+    tx.commit()?;
+    Ok(keep_id)
+}
+
+/// Pares con señales de duplicado que no se fusionaron automáticamente.
+pub fn find_duplicates(
+    conn: &Connection,
+    min_score: f64,
+    max_distance_m: f64,
+    limit: usize,
+) -> Result<Vec<DuplicatePair>> {
+    let mut stmt = conn.prepare(
+        "SELECT a.id, b.id
+         FROM businesses a
+         JOIN businesses b ON a.id < b.id
+         WHERE (a.match_name = b.match_name AND a.match_name <> '')
+            OR (a.phone_primary IS NOT NULL AND a.phone_primary = b.phone_primary)
+            OR (a.website_domain IS NOT NULL AND a.website_domain = b.website_domain)
+         LIMIT 3000",
+    )?;
+    let pairs: Vec<(String, String)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut cache: HashMap<String, Business> = HashMap::new();
+    let mut out = Vec::new();
+    let mut seen: HashSet<(String, String)> = HashSet::new();
+
+    for (left_id, right_id) in pairs {
+        if !seen.insert((left_id.clone(), right_id.clone())) {
+            continue;
+        }
+        if !cache.contains_key(&left_id) {
+            if let Some(business) = load_business(conn, &left_id)? {
+                cache.insert(left_id.clone(), business);
+            }
+        }
+        if !cache.contains_key(&right_id) {
+            if let Some(business) = load_business(conn, &right_id)? {
+                cache.insert(right_id.clone(), business);
+            }
+        }
+        let (Some(left), Some(right)) = (cache.get(&left_id), cache.get(&right_id)) else {
+            continue;
+        };
+
+        let mut score = 0.35 * similarity(&left.match_name_hint(), &right.match_name_hint());
+        let mut reasons = Vec::new();
+
+        if normalize_text(&left.name) == normalize_text(&right.name) {
+            reasons.push("mismo nombre".to_string());
+            score += 0.1;
+        }
+        if left.phone_primary.is_some() && left.phone_primary == right.phone_primary {
+            reasons.push("mismo teléfono".to_string());
+            score += 0.35;
+        }
+        if left.website.is_some() && left.website == right.website {
+            reasons.push("mismo sitio web".to_string());
+            score += 0.2;
+        }
+        let left_address = normalize_text(left.address.line.as_deref().unwrap_or(""));
+        let right_address = normalize_text(right.address.line.as_deref().unwrap_or(""));
+        if left_address.len() >= 5 && left_address == right_address {
+            reasons.push("misma dirección".to_string());
+            score += 0.15;
+        }
+        if left.address.barrio.is_some() && left.address.barrio == right.address.barrio {
+            reasons.push("mismo barrio".to_string());
+            score += 0.05;
+        }
+        if left.address.municipio.is_some()
+            && normalize_text(left.address.municipio.as_deref().unwrap_or(""))
+                == normalize_text(right.address.municipio.as_deref().unwrap_or(""))
+        {
+            score += 0.05;
+        }
+
+        let distance_m = match (
+            left.latitude,
+            left.longitude,
+            right.latitude,
+            right.longitude,
+        ) {
+            (Some(lat1), Some(lon1), Some(lat2), Some(lon2)) => {
+                Some(haversine_m(lat1, lon1, lat2, lon2))
+            }
+            _ => None,
+        };
+        if let Some(distance) = distance_m {
+            if distance > max_distance_m {
+                continue;
+            }
+            if distance <= 100.0 {
+                score += 0.25;
+            } else if distance <= 300.0 {
+                score += 0.2;
+            } else if distance <= 1_000.0 {
+                score += 0.1;
+            } else {
+                score += 0.05;
+            }
+            reasons.push(format!("a {distance:.0} m"));
+        }
+
+        let score = score.clamp(0.0, 1.0);
+        if score < min_score {
+            continue;
+        }
+        out.push(DuplicatePair {
+            left: DuplicateBusiness::from(left),
+            right: DuplicateBusiness::from(right),
+            score,
+            distance_m,
+            reasons,
+        });
+    }
+
+    out.sort_by(|a, b| b.score.total_cmp(&a.score));
+    out.truncate(limit);
+    Ok(out)
+}
+
+impl Business {
+    fn match_name_hint(&self) -> String {
+        normalize_name_for_match(&self.name)
+    }
 }

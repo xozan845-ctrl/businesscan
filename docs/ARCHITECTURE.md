@@ -14,6 +14,7 @@
         │  osm (Overpass)                           │
         │  google (Places API)                      │
         │  foursquare (Places API)                  │
+        │  overture (GeoJSON local)                 │
         │  import (CSV/JSON/JSONL)                  │
         └──────────────────┬────────────────────────┘
                            │ Vec<BusinessRecord>
@@ -48,7 +49,9 @@ lotes de 200 registros dentro de una transacción.
 | `src/location.rs` | `LocationInput` → `ResolvedLocation`; Nominatim search/reverse y filtros geográficos. |
 | `src/gazetteer.rs` | 17 departamentos/regiones y 153 municipios para validar nombres. |
 | `src/normalize.rs` | Sin acentos, teléfonos E.164, URLs, redes, geohash, Haversine, FTS. |
-| `src/providers/` | Adaptadores de fuentes y normalización a `BusinessRecord`. |
+| `src/providers/` | Adaptadores de fuentes (OSM, Google, Foursquare, Overture, import). |
+| `src/enrich.rs` | Enriquecimiento web: robots, JSON-LD, meta, enlaces y SSRF. |
+| `src/server.rs` | API HTTP local (Axum) para agentes de IA. |
 | `src/db/business.rs` | Inserción, deduplicación, fusión, FTS, búsqueda y estadísticas. |
 | `src/db/places.rs` | Caché de geocodificación. |
 | `src/db/schema.rs` | Esquema SQL y migraciones. |
@@ -63,11 +66,11 @@ conserva `raw` (JSON original). Los proveedores no escriben en SQLite.
 `Business` es el **registro canónico** guardado en SQLite. `BusinessFull` añade
 contactos, alias, categorías, etiquetas y fuentes para `show`/`export`.
 
-## Esquema SQLite (v1)
+## Esquema SQLite (v2)
 
 | Tabla | Contenido |
 |---|---|
-| `businesses` | Una fila por negocio canónico; campos normalizados para filtros. |
+| `businesses` | Una fila por negocio canónico; campos normalizados para filtros y `quality_score`. |
 | `contacts` | Teléfonos, correos, webs y redes; `match_key` para deduplicar. |
 | `business_aliases` | Nombres alternativos. |
 | `business_categories` | Categorías normalizadas. |
@@ -78,9 +81,11 @@ contactos, alias, categorías, etiquetas y fuentes para `show`/`export`.
 | `businesses_fts` | FTS5 (nombre, alias, categorías, dirección, descripción, admin, tags). |
 | `meta` | Versión de app, disponibilidad de FTS5, etc. |
 
-La versión del esquema vive en `PRAGMA user_version`. Al abrir una base más
-nueva que el binario se aborta con un mensaje claro. Las migraciones futuras
-deben añadirse a `db/schema.rs` incrementando `SCHEMA_VERSION`.
+La versión del esquema vive en `PRAGMA user_version`. v2 añade
+`quality_score` (0..1) y lo recalcula al insertar, fusionar o migrar. Al abrir
+una base más nueva que el binario se aborta con un mensaje claro. Las
+migraciones futuras deben añadirse a `db/schema.rs` incrementando
+`SCHEMA_VERSION`.
 
 ### Normalización para filtros
 
@@ -118,7 +123,7 @@ No se fusionan dos sucursales de una cadena solo por nombre: se exige teléfono,
 web, dirección o cercanía. Es una decisión conservadora para no contaminar el
 directorio.
 
-La fusión (`merge_into`):
+La fusión automática (`merge_into`):
 
 - conserva el nombre canónico y agrega el nuevo como alias si difiere;
 - rellena campos vacíos (descripción, web, email, dirección, coordenadas…);
@@ -126,7 +131,13 @@ La fusión (`merge_into`):
 - toma rating/reseñas de la fuente con más reseñas;
 - agrega contactos, categorías y etiquetas sin duplicar;
 - registra una nueva observación en `business_sources`;
-- recalcula `source_count` y `confidence` (máximo + bonus por fuente).
+- recalcula `source_count`, `confidence` y `quality_score`.
+
+La fusión manual (`merge_businesses`) mueve contactos, alias, categorías,
+etiquetas y observaciones de un negocio a otro, elige los campos más completos,
+recalcula calidad y elimina el registro absorbido. `find_duplicates` propone
+pares por nombre/teléfono/web, distancia, dirección y barrio para revisión
+humana.
 
 ## Geocodificación
 
@@ -166,6 +177,39 @@ Cada lote de 200 registros es atómico: un Ctrl-C puede dejar los lotes ya
 confirmados, pero no una transacción a medias. Las observaciones crudas permiten
 reprocesar o auditar después.
 
+## Enriquecimiento web
+
+`enrich` selecciona negocios con `website`, visita la portada y hasta N páginas
+de contacto/nosotros y crea una observación con `source='web'`. Antes de cada
+petición:
+
+1. Resuelve el host y bloquea IPs privadas/loopback (SSRF).
+2. Descarga y cachea `robots.txt` por origen; si no se puede leer, omite el
+   sitio.
+3. Respeta `Crawl-delay` y una pausa mínima por host.
+4. Limita el cuerpo a 2 MB y acepta solo HTML/texto.
+
+Extrae JSON-LD (incluido `@graph`), metaetiquetas, `mailto:`, `tel:`, enlaces de
+WhatsApp y redes, y correos/teléfonos sueltos con filtros de ruido. La
+observación se fusiona en el negocio con `add_observation` (sin volver a buscar
+duplicados).
+
+## Overture Maps
+
+Overture se distribuye como GeoParquet en S3; leerlo completo no es viable en
+Termux. `nicascan` acepta un extracto **GeoJSON/JSONL** generado con DuckDB y lo
+consulta como fuente `overture` (opt-in). El proveedor mapea `names`,
+`categories`, `confidence`, `phones`, `emails`, `websites`, `socials`,
+`addresses`, `operating_status` y el punto GeoJSON. El filtro geográfico se
+aplica con el bbox/radio resuelto.
+
+## API
+
+`serve` comparte `Arc<Mutex<Database>>`; cada request bloquea brevemente para
+leer. Por defecto escucha en loopback. Si se escucha en otra interfaz exige
+token Bearer. Los endpoints devuelven `BusinessFull` (contactos y procedencia)
+salvo `full=false`. `/v1/export` pagina internamente y devuelve NDJSON.
+
 ## Portabilidad
 
 - `rusqlite` con SQLite embebido (`bundled`), sin dependencia del sistema.
@@ -177,9 +221,9 @@ reprocesar o auditar después.
 
 ## Pruebas
 
-- Unitarias: normalización, gafete, geohash, construcción de consultas
-  Overpass, mapeo de Google/Foursquare/import.
-- Integración (`tests/database.rs`): FTS, filtros, deduplicación por teléfono y
-  por nombre+cercanía, procedencia múltiple.
-- Exportación JSONL/CSV en memoria.
+- Unitarias: normalización, gafete, geohash, consultas Overpass, mapeo de
+  Google/Foursquare/Overture/import, robots y JSON-LD.
+- Integración (`tests/database.rs`): FTS, filtros, calidad, deduplicación por
+  teléfono y nombre+cercanía, detección y fusión manual de duplicados.
+- Exportación JSONL/CSV en memoria y pruebas manuales de la API con `curl`.
 - `cargo clippy --all-targets -- -D warnings` en CI.

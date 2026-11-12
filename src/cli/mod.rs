@@ -1,11 +1,14 @@
 //! Interfaz de línea de comandos.
 
 mod db_cmd;
+mod enrich;
 mod export_cmd;
 mod import_cmd;
 mod places;
+mod review;
 mod scan;
 mod search_cmd;
+mod serve;
 mod show;
 mod sources;
 mod stats;
@@ -29,8 +32,8 @@ use crate::output::Theme;
     version,
     about = "Directorio extensible de negocios de Nicaragua",
     long_about = "NicaScan busca negocios en múltiples fuentes (OpenStreetMap, Google Places, \
-Foursquare e importaciones CSV/JSON), los deduplica y los guarda en una base SQLite \
-portable para consultarlos, exportarlos o alimentar agentes de IA.\n\n\
+Foursquare, Overture Maps e importaciones CSV/JSON), los deduplica, enriquece desde sus sitios web \
+y los guarda en una base SQLite portable. Incluye API HTTP local para agentes de IA.\n\n\
 Funciona en Termux (Android), Linux, macOS y Windows.",
     propagate_version = true,
     arg_required_else_help = true
@@ -82,12 +85,20 @@ pub enum Command {
     /// Importa un CSV/JSON/JSONL externo
     #[command(visible_alias = "importar")]
     Import(import_cmd::ImportArgs),
+    /// Completa fichas desde el sitio web de cada negocio
+    Enrich(enrich::EnrichArgs),
     /// Lista las fuentes y su estado
     Sources,
     /// Estadísticas y cobertura de la base
     Stats,
     /// Gestiona ubicaciones geocodificadas
     Places(places::PlacesArgs),
+    /// Levanta una API HTTP local para agentes de IA
+    Serve(serve::ServeArgs),
+    /// Revisa posibles duplicados que no se fusionaron
+    Duplicates(review::DuplicatesArgs),
+    /// Fusiona dos negocios manualmente
+    Merge(review::MergeArgs),
     /// Utilidades de la base de datos
     Db(db_cmd::DbArgs),
 }
@@ -98,6 +109,7 @@ pub enum SortArg {
     Relevance,
     Name,
     Confidence,
+    Quality,
     Updated,
     Distance,
 }
@@ -108,6 +120,7 @@ impl From<SortArg> for SortBy {
             SortArg::Relevance => SortBy::Relevance,
             SortArg::Name => SortBy::Name,
             SortArg::Confidence => SortBy::Confidence,
+            SortArg::Quality => SortBy::Quality,
             SortArg::Updated => SortBy::Updated,
             SortArg::Distance => SortBy::Distance,
         }
@@ -235,6 +248,10 @@ pub struct FilterArgs {
     #[arg(long)]
     pub min_confidence: Option<f64>,
 
+    /// Calidad mínima de la ficha, 0..1
+    #[arg(long)]
+    pub min_quality: Option<f64>,
+
     /// Centro geográfico (latitud)
     #[arg(long, allow_hyphen_values = true)]
     pub lat: Option<f64>,
@@ -265,6 +282,7 @@ impl FilterArgs {
             || self.has_email
             || self.has_website
             || self.min_confidence.is_some()
+            || self.min_quality.is_some()
             || self.lat.is_some()
             || self.lon.is_some()
     }
@@ -276,6 +294,11 @@ impl FilterArgs {
         if let Some(value) = self.min_confidence {
             if !(0.0..=1.0).contains(&value) {
                 bail!("--min-confidence debe estar entre 0 y 1");
+            }
+        }
+        if let Some(value) = self.min_quality {
+            if !(0.0..=1.0).contains(&value) {
+                bail!("--min-quality debe estar entre 0 y 1");
             }
         }
         let gaz = Gazetteer::global();
@@ -308,6 +331,7 @@ impl FilterArgs {
             has_email: self.has_email,
             has_website: self.has_website,
             min_confidence: self.min_confidence,
+            min_quality: self.min_quality,
             updated_since: None,
             lat: self.lat,
             lon: self.lon,
@@ -351,9 +375,13 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Command::Show(args) => show::run(args, &config, &cli.global, &theme),
         Command::Export(args) => export_cmd::run(args, &config, &cli.global, &theme),
         Command::Import(args) => import_cmd::run(args, &config, &cli.global, &theme),
+        Command::Enrich(args) => enrich::run(args, &config, &cli.global, &theme).await,
         Command::Sources => sources::run(&config, &cli.global, &theme),
         Command::Stats => stats::run(&config, &cli.global, &theme),
         Command::Places(args) => places::run(args, &config, &cli.global, &theme).await,
+        Command::Serve(args) => serve::run(args, &config, &cli.global, &theme).await,
+        Command::Duplicates(args) => review::duplicates(args, &config, &cli.global, &theme),
+        Command::Merge(args) => review::merge(args, &config, &cli.global, &theme),
         Command::Db(args) => db_cmd::run(args, &config, &cli.global, &theme),
     }
 }
