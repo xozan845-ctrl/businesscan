@@ -27,11 +27,11 @@ pub enum PlacesCommand {
         #[arg(short = 'C', long)]
         country: Option<String>,
         /// Departamento para desambiguar
-        #[arg(short = 'd', long)]
-        departamento: Option<String>,
+        #[arg(short = 'd', long, visible_alias = "departamento")]
+        department: Option<String>,
         /// Ciudad/municipio para desambiguar
-        #[arg(short = 'm', long)]
-        municipio: Option<String>,
+        #[arg(short = 'm', long, visible_alias = "municipio")]
+        city: Option<String>,
         /// Ignora la caché existente
         #[arg(long)]
         refresh: bool,
@@ -75,15 +75,15 @@ pub async fn run(
         PlacesCommand::Resolve {
             query,
             country,
-            departamento,
-            municipio,
+            department,
+            city,
             refresh,
         } => {
             let input = LocationInput {
                 place: Some(query.join(" ")),
                 country,
-                department: departamento,
-                city: municipio,
+                department,
+                city,
                 ..Default::default()
             };
             input.validate()?;

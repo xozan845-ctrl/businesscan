@@ -39,16 +39,16 @@ pub struct ImportArgs {
     pub country: Option<String>,
 
     /// Departamento por defecto si el archivo no lo trae
-    #[arg(short = 'd', long)]
-    pub departamento: Option<String>,
+    #[arg(short = 'd', long, visible_alias = "departamento")]
+    pub department: Option<String>,
 
     /// Ciudad/municipio por defecto si el archivo no lo trae
-    #[arg(short = 'm', long)]
-    pub municipio: Option<String>,
+    #[arg(short = 'm', long, visible_alias = "municipio")]
+    pub city: Option<String>,
 
     /// Barrio por defecto si el archivo no lo trae
-    #[arg(long)]
-    pub barrio: Option<String>,
+    #[arg(long, visible_alias = "barrio")]
+    pub neighborhood: Option<String>,
 
     /// Comarca por defecto si el archivo no lo trae
     #[arg(long)]
@@ -98,9 +98,9 @@ pub fn run(args: ImportArgs, config: &Config, global: &GlobalArgs, theme: &Theme
     };
     let hints = build_hints(
         args.country.as_deref(),
-        args.departamento.as_deref(),
-        args.municipio.as_deref(),
-        args.barrio.as_deref(),
+        args.department.as_deref(),
+        args.city.as_deref(),
+        args.neighborhood.as_deref(),
         args.comarca.as_deref(),
         args.lat,
         args.lon,

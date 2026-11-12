@@ -228,15 +228,15 @@ pub struct FilterArgs {
 
     /// Departamento, provincia o estado
     #[arg(short = 'd', long, visible_alias = "departamento")]
-    pub departamento: Option<String>,
+    pub department: Option<String>,
 
     /// Ciudad o municipio
     #[arg(short = 'm', long, visible_alias = "municipio")]
-    pub municipio: Option<String>,
+    pub city: Option<String>,
 
     /// Barrio o comarca
     #[arg(long, visible_alias = "barrio")]
-    pub barrio: Option<String>,
+    pub neighborhood: Option<String>,
 
     /// Categoría o tipo de negocio
     #[arg(short = 'c', long)]
@@ -292,9 +292,9 @@ impl FilterArgs {
         !self.text.is_empty()
             || self.country.is_some()
             || self.continent.is_some()
-            || self.departamento.is_some()
-            || self.municipio.is_some()
-            || self.barrio.is_some()
+            || self.department.is_some()
+            || self.city.is_some()
+            || self.neighborhood.is_some()
             || self.category.is_some()
             || self.source.is_some()
             || self.status.is_some()
@@ -347,8 +347,8 @@ impl FilterArgs {
         } else {
             None
         };
-        let departamento = self.departamento.clone();
-        let municipio = self.municipio.clone();
+        let departamento = self.department.clone();
+        let municipio = self.city.clone();
         Ok(SearchQuery {
             countries,
             text: {
@@ -361,7 +361,7 @@ impl FilterArgs {
             },
             departamento,
             municipio,
-            barrio: self.barrio.clone(),
+            barrio: self.neighborhood.clone(),
             category: self.category.clone(),
             source: self.source.clone(),
             status: self.status.clone(),
