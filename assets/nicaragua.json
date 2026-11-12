@@ -1,0 +1,240 @@
+[
+  {
+    "department": "Atlántico Norte",
+    "municipalities": [
+      "Puerto Cabezas",
+      "Bonanza",
+      "Mulukukú",
+      "Prinzapolka",
+      "Rosita",
+      "Siuna",
+      "Waslala",
+      "Waspán"
+    ]
+  },
+  {
+    "department": "Atlántico Sur",
+    "municipalities": [
+      "Bluefields",
+      "Corn Island",
+      "Desembocadura de Río Grande",
+      "El Ayote",
+      "El Tortuguero",
+      "Kukrahill",
+      "La Cruz de Río Grande",
+      "Laguna de Perlas",
+      "Muelle de los Bueyes",
+      "Nueva Guinea",
+      "Paiwas",
+      "El Rama"
+    ]
+  },
+  {
+    "department": "Boaco",
+    "municipalities": [
+      "Boaco",
+      "Camoapa",
+      "San Lorenzo",
+      "San José de Los Remates",
+      "Santa Lucía",
+      "Teustepe"
+    ]
+  },
+  {
+    "department": "Carazo",
+    "municipalities": [
+      "Dolores",
+      "Diriamba",
+      "El Rosario",
+      "Jinotepe",
+      "La Conquista",
+      "La Paz de Carazo",
+      "San Marcos",
+      "Santa Teresa"
+    ]
+  },
+  {
+    "department": "Chinandega",
+    "municipalities": [
+      "Chinandega",
+      "Chichigalpa",
+      "Cinco Pinos",
+      "Corinto",
+      "El Realejo",
+      "El Viejo",
+      "Posoltega",
+      "San Francisco del Norte",
+      "San Pedro del Norte",
+      "Santo Tomás del Norte",
+      "Somotillo",
+      "Puerto Morazán",
+      "Villanueva"
+    ]
+  },
+  {
+    "department": "Chontales",
+    "municipalities": [
+      "Comalapa",
+      "Acoyapa",
+      "Cuapa",
+      "El Coral",
+      "Juigalpa",
+      "La Libertad",
+      "San Pedro de Lóvago",
+      "Santo Domingo",
+      "Santo Tomás",
+      "Villa Sandino"
+    ]
+  },
+  {
+    "department": "Estelí",
+    "municipalities": [
+      "Estelí",
+      "Condega",
+      "La Trinidad",
+      "Pueblo Nuevo",
+      "San Juan de Limay",
+      "San Nicolás"
+    ]
+  },
+  {
+    "department": "Granada",
+    "municipalities": [
+      "Diriomo",
+      "Diriá",
+      "Granada",
+      "Nandaime"
+    ]
+  },
+  {
+    "department": "Jinotega",
+    "municipalities": [
+      "Jinotega",
+      "El Cuá",
+      "La Concordia",
+      "San José de Bocay",
+      "San Rafael del Norte",
+      "San Sebastián de Yalí",
+      "Santa María de Pantasma",
+      "Wiwilí"
+    ]
+  },
+  {
+    "department": "León",
+    "municipalities": [
+      "El Jicaral",
+      "Achuapa",
+      "El Sauce",
+      "La Paz Centro",
+      "Larreynaga",
+      "León",
+      "Nagarote",
+      "Quezalguaque",
+      "Santa Rosa del Peñón",
+      "Telica"
+    ]
+  },
+  {
+    "department": "Madriz",
+    "municipalities": [
+      "Palacagüina",
+      "Las Sabanas",
+      "San José de Cusmapa",
+      "San Juan de Río Coco",
+      "San Lucas",
+      "Somoto",
+      "Telpaneca",
+      "Totogalpa",
+      "Yalagüina"
+    ]
+  },
+  {
+    "department": "Managua",
+    "municipalities": [
+      "El Crucero",
+      "Ciudad Sandino",
+      "Managua",
+      "Mateare",
+      "San Francisco Libre",
+      "San Rafael del Sur",
+      "Ticuantepe",
+      "Tipitapa",
+      "Villa El Carmen"
+    ]
+  },
+  {
+    "department": "Masaya",
+    "municipalities": [
+      "La Concepción",
+      "Catarina",
+      "Masatepe",
+      "Masaya",
+      "Nandasmo",
+      "Nindirí",
+      "Niquinohomo",
+      "San Juan de Oriente",
+      "Tisma"
+    ]
+  },
+  {
+    "department": "Matagalpa",
+    "municipalities": [
+      "El Tuma - La Dalia",
+      "Ciudad Darío",
+      "Esquipulas",
+      "Matagalpa",
+      "Matiguás",
+      "Muy Muy",
+      "Rancho Grande",
+      "Río Blanco",
+      "San Dionisio",
+      "San Isidro",
+      "San Ramón",
+      "Sébaco",
+      "Terrabona"
+    ]
+  },
+  {
+    "department": "Nueva Segovia",
+    "municipalities": [
+      "Dipilto",
+      "Ciudad Antigua",
+      "El Jícaro",
+      "Wiwilí",
+      "Jalapa",
+      "Macuelizo",
+      "Mozonte",
+      "Murra",
+      "Ocotal",
+      "Quilalí",
+      "San Fernando",
+      "Santa María"
+    ]
+  },
+  {
+    "department": "Río San Juan",
+    "municipalities": [
+      "El Castillo",
+      "El Almendro",
+      "Morrito",
+      "San Carlos",
+      "San Juan del Norte",
+      "San Miguelito"
+    ]
+  },
+  {
+    "department": "Rivas",
+    "municipalities": [
+      "Belén",
+      "Buenos Aires",
+      "Altagracia",
+      "Cárdenas",
+      "Moyogalpa",
+      "Potosí",
+      "Rivas",
+      "San Jorge",
+      "San Juan del Sur",
+      "Tola"
+    ]
+  }
+]

@@ -1,0 +1,138 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            asset: nicascan-linux-x86_64
+          - target: aarch64-unknown-linux-musl
+            asset: nicascan-linux-aarch64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: goto-bus-stop/setup-zig@v2
+
+      - name: Instalar cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Compilar
+        run: cargo zigbuild --release --target ${{ matrix.target }}
+
+      - name: Empaquetar
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/nicascan" "dist/${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+      - name: Empaquetar
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/release/nicascan.exe dist/nicascan-windows-x86_64.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nicascan-windows-x86_64.exe
+          path: dist/nicascan-windows-x86_64.exe
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            asset: nicascan-macos-arm64
+          - target: x86_64-apple-darwin
+            asset: nicascan-macos-x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Compilar
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Empaquetar
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/nicascan" "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-ndk --locked
+      - run: cargo ndk -t arm64-v8a -p 24 build --release
+      - name: Empaquetar
+        run: |
+          mkdir -p dist
+          cp target/aarch64-linux-android/release/nicascan dist/nicascan-android-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nicascan-android-arm64
+          path: dist/nicascan-android-arm64
+          if-no-files-found: error
+
+  release:
+    needs: [linux, windows, macos, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          name: NicaScan ${{ github.ref_name }}

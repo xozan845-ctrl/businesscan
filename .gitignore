@@ -1,0 +1,29 @@
+# Build
+/target/
+/dist/
+*.exe
+*.test
+*.out
+
+# Bases de datos y exportaciones locales
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.jsonl
+*.ndjson
+*.csv
+!assets/*.json
+
+# Secretos y configuración local
+.env
+.env.*
+!.env.example
+
+# Editores y sistema
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
