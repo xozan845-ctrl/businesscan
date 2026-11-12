@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NicaScan · Panel</title>
+<title>BusinessCan · Panel</title>
 <style>
   :root {
     --bg: #070d18;
@@ -117,7 +117,7 @@
   <header>
     <div>
       <div class="logo">◈ NICA<span>SCAN</span></div>
-      <div class="tag">Panel de revisión · directorio de negocios de Nicaragua</div>
+      <div class="tag">Panel de revisión · directorio internacional de negocios</div>
     </div>
     <div class="spacer"></div>
     <div class="token-box">
@@ -141,14 +141,26 @@
           <label>Texto libre</label>
           <input id="q" placeholder="farmacia, ferretería, nombre…" onkeydown="if(event.key==='Enter')searchBusinesses()">
         </div>
+        <div class="field"><label>País (ISO)</label><input id="country" placeholder="NI"></div>
         <div class="field"><label>Departamento</label><input id="departamento" placeholder="León"></div>
-        <div class="field"><label>Municipio</label><input id="municipio" placeholder="Managua"></div>
+        <div class="field"><label>Ciudad</label><input id="municipio" placeholder="Managua"></div>
         <div class="field"><label>Categoría</label><input id="category" placeholder="restaurante"></div>
       </div>
       <div class="checks">
         <label><input type="checkbox" id="has_phone"> Con teléfono</label>
         <label><input type="checkbox" id="has_website"> Con web</label>
         <label><input type="checkbox" id="has_email"> Con correo</label>
+        <label>Continente <select id="continent">
+          <option value="">Todos</option>
+          <option value="central-america">Centroamérica</option>
+          <option value="north-america">Norteamérica</option>
+          <option value="south-america">Sudamérica</option>
+          <option value="europe">Europa</option>
+          <option value="asia">Asia</option>
+          <option value="africa">África</option>
+          <option value="oceania">Oceanía</option>
+          <option value="world">Mundo</option>
+        </select></label>
         <label>Calidad mínima <input id="min_quality" type="number" min="0" max="1" step="0.1" placeholder="0.5" style="width:90px"></label>
         <label>Límite <input id="limit" type="number" min="1" max="500" value="25" style="width:82px"></label>
       </div>
@@ -180,7 +192,7 @@
     <div id="stats-lists" style="margin-top:14px"></div>
   </section>
 
-  <div class="foot">NicaScan · datos © OpenStreetMap (ODbL), Google, Foursquare y Overture según sus licencias.</div>
+  <div class="foot">BusinessCan · datos © OpenStreetMap (ODbL), Google, Foursquare y Overture según sus licencias.</div>
 </div>
 
 <div id="modal" class="modal" onclick="if(event.target===this)closeModal()">
@@ -195,9 +207,9 @@ const $ = (id) => document.getElementById(id);
 let activeTab = 'search';
 let resultsCache = [];
 
-function token() { return localStorage.getItem('nicascan_token') || $('token').value.trim(); }
+function token() { return localStorage.getItem('businesscan_token') || $('token').value.trim(); }
 function saveToken() {
-  localStorage.setItem('nicascan_token', $('token').value.trim());
+  localStorage.setItem('businesscan_token', $('token').value.trim());
   flash('Token guardado en este navegador.');
 }
 function headers() {
@@ -252,6 +264,8 @@ function queryParams() {
   const params = new URLSearchParams();
   const add = (key, value) => { if (value !== '' && value !== null && value !== undefined) params.set(key, value); };
   add('q', $('q').value.trim());
+  add('country', $('country').value.trim());
+  add('continent', $('continent').value);
   add('departamento', $('departamento').value.trim());
   add('municipio', $('municipio').value.trim());
   add('category', $('category').value.trim());
@@ -263,7 +277,8 @@ function queryParams() {
   return params;
 }
 function clearSearch() {
-  ['q','departamento','municipio','category','min_quality'].forEach(id => $(id).value = '');
+  ['q','country','departamento','municipio','category','min_quality'].forEach(id => $(id).value = '');
+  $('continent').value = '';
   ['has_phone','has_website','has_email'].forEach(id => $(id).checked = false);
   $('results').innerHTML = '';
   $('search-meta').textContent = '';
@@ -350,7 +365,7 @@ async function exportJsonl() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'nicascan.jsonl';
+    link.download = 'businesscan.jsonl';
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -432,11 +447,11 @@ async function loadStats() {
       if (!rows || !rows.length) return '';
       return `<div class="card" style="margin-bottom:12px"><h3 style="margin-top:0">${title}</h3>${rows.slice(0, max).map(r => `<div style="display:flex;gap:10px;align-items:center;margin:5px 0"><div style="width:190px" class="sub">${esc(r.label)}</div><div class="bar" style="flex:1"><i style="width:${Math.min(100, r.count / rows[0].count * 100)}%"></i></div><div class="sub">${Number(r.count).toLocaleString('es')}</div></div>`).join('')}</div>`;
     };
-    $('stats-lists').innerHTML = list('Por departamento', s.by_departamento) + list('Por categoría', s.by_category) + list('Por fuente', s.by_source);
+    $('stats-lists').innerHTML = list('Por país', s.by_country) + list('Por departamento', s.by_departamento) + list('Por categoría', s.by_category) + list('Por fuente', s.by_source);
   } catch (error) { showError(error.message); }
 }
-$('token').value = localStorage.getItem('nicascan_token') || '';
-if (localStorage.getItem('nicascan_token')) searchBusinesses();
+$('token').value = localStorage.getItem('businesscan_token') || '';
+if (localStorage.getItem('businesscan_token')) searchBusinesses();
 </script>
 </body>
 </html>

@@ -18,8 +18,8 @@ use crate::model::{
 };
 use crate::normalize::{
     domain_of, fts_query, geohash, haversine_m, normalize_email, normalize_name_for_match,
-    normalize_phone, normalize_social, normalize_text, normalize_url, phone_key, similarity,
-    stable_hash,
+    normalize_phone_for, normalize_social, normalize_text, normalize_url, phone_key_for,
+    similarity, stable_hash,
 };
 
 pub fn now() -> String {
@@ -112,7 +112,8 @@ fn find_match(conn: &Connection, record: &BusinessRecord) -> Result<Option<(Stri
         if !contact.kind.is_phone_like() {
             continue;
         }
-        let Some(key) = phone_key(&contact.value) else {
+        let Some(key) = phone_key_for(&contact.value, record.address.country_code.as_deref())
+        else {
             continue;
         };
         if let Some(id) = conn
@@ -356,13 +357,10 @@ fn merge_into(conn: &Connection, id: &str, record: &BusinessRecord) -> Result<()
     };
 
     let address = merge_address(&existing.address, &record.address);
-    let country_code = address.country_code.clone().unwrap_or_else(|| {
-        existing
-            .address
-            .country_code
-            .clone()
-            .unwrap_or_else(|| "NI".into())
-    });
+    let country_code = address
+        .country_code
+        .clone()
+        .unwrap_or_else(|| existing.address.country_code.clone().unwrap_or_default());
 
     conn.execute(
         "UPDATE businesses SET
@@ -495,7 +493,13 @@ fn insert_related(
     canonical_name: &str,
 ) -> Result<()> {
     for contact in &record.contacts {
-        insert_contact(conn, id, contact, &record.source)?;
+        insert_contact(
+            conn,
+            id,
+            contact,
+            &record.source,
+            record.address.country_code.as_deref(),
+        )?;
     }
 
     let mut aliases: Vec<String> = record.aliases.clone();
@@ -552,7 +556,13 @@ fn insert_related(
     Ok(())
 }
 
-fn insert_contact(conn: &Connection, id: &str, contact: &Contact, source: &str) -> Result<()> {
+fn insert_contact(
+    conn: &Connection,
+    id: &str,
+    contact: &Contact,
+    source: &str,
+    country_code: Option<&str>,
+) -> Result<()> {
     let raw = contact.value.trim();
     if raw.is_empty() {
         return Ok(());
@@ -561,10 +571,10 @@ fn insert_contact(conn: &Connection, id: &str, contact: &Contact, source: &str) 
 
     let (value, normalized, match_key) = match kind {
         ContactKind::Phone | ContactKind::Mobile | ContactKind::Whatsapp => {
-            let Some(normalized) = normalize_phone(raw) else {
+            let Some(normalized) = normalize_phone_for(raw, country_code) else {
                 return Ok(());
             };
-            let Some(key) = phone_key(raw) else {
+            let Some(key) = phone_key_for(raw, country_code) else {
                 return Ok(());
             };
             (normalized.clone(), Some(normalized), Some(key))
@@ -784,7 +794,7 @@ fn external_id_for(record: &BusinessRecord) -> String {
             let phone = record
                 .phone_values()
                 .next()
-                .and_then(phone_key)
+                .and_then(|value| phone_key_for(value, record.address.country_code.as_deref()))
                 .unwrap_or_default();
             let address = record.address.line.clone().unwrap_or_default();
             format!(
@@ -839,7 +849,7 @@ fn primary_contact(record: &BusinessRecord, kind: ContactKind) -> Option<String>
 
     match kind {
         ContactKind::Phone | ContactKind::Mobile | ContactKind::Whatsapp => {
-            Some(normalize_phone(&raw).unwrap_or(raw))
+            Some(normalize_phone_for(&raw, record.address.country_code.as_deref()).unwrap_or(raw))
         }
         ContactKind::Email => Some(normalize_email(&raw).unwrap_or(raw)),
         ContactKind::Website => Some(normalize_url(&raw).unwrap_or(raw)),
@@ -940,6 +950,16 @@ pub fn search(db: &Database, query: &SearchQuery) -> Result<Vec<Business>> {
         }
     }
 
+    if let Some(countries) = query.countries.as_ref().filter(|values| !values.is_empty()) {
+        let placeholders = std::iter::repeat("?")
+            .take(countries.len())
+            .collect::<Vec<_>>()
+            .join(",");
+        where_parts.push(format!("b.country_code IN ({placeholders})"));
+        for country in countries {
+            values.push(Value::Text(country.to_uppercase()));
+        }
+    }
     if let Some(dept) = query
         .departamento
         .as_deref()
@@ -1339,6 +1359,11 @@ pub fn stats(conn: &Connection) -> Result<Stats> {
         |row| row.get(0),
     )?;
 
+    let by_country = count_rows(
+        conn,
+        "SELECT COALESCE(NULLIF(country_code,''),'(sin país)'), COUNT(*)
+         FROM businesses GROUP BY country_code ORDER BY COUNT(*) DESC",
+    )?;
     let by_departamento = count_rows(
         conn,
         "SELECT COALESCE(NULLIF(departamento,''),'(sin departamento)'), COUNT(*)
@@ -1390,6 +1415,7 @@ pub fn stats(conn: &Connection) -> Result<Stats> {
         with_coordinates,
         with_address,
         avg_quality,
+        by_country,
         by_departamento,
         by_category,
         by_source,

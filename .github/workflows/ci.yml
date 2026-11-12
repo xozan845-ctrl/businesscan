@@ -54,4 +54,4 @@ jobs:
         run: cargo ndk -t arm64-v8a -p 24 build --release
 
       - name: Verificar binario
-        run: file target/aarch64-linux-android/release/nicascan
+        run: file target/aarch64-linux-android/release/businesscan

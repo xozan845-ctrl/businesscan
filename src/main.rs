@@ -1,5 +1,5 @@
+use businesscan::cli::{init_logging, run, Cli};
 use clap::Parser;
-use nicascan::cli::{init_logging, run, Cli};
 
 #[tokio::main]
 async fn main() {

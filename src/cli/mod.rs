@@ -29,12 +29,10 @@ use crate::output::Theme;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "nicascan",
+    name = "businesscan",
     version,
-    about = "Directorio extensible de negocios de Nicaragua",
-    long_about = "NicaScan busca negocios en múltiples fuentes (OpenStreetMap, Google Places, \
-Foursquare, Overture Maps e importaciones CSV/JSON), los deduplica, enriquece desde sus sitios web \
-y los guarda en una base SQLite portable. Incluye API HTTP local para agentes de IA.\n\n\
+    about = "Directorio internacional de negocios",
+    long_about = "BusinessCan busca negocios en múltiples fuentes (OpenStreetMap, Google Places, Foursquare, Overture Maps e importaciones CSV/JSON), los deduplica, enriquece desde sus sitios web y los guarda en una base SQLite portable. Incluye API HTTP local para agentes de IA.\n\n\
 Funciona en Termux (Android), Linux, macOS y Windows.",
     propagate_version = true,
     arg_required_else_help = true
@@ -48,8 +46,8 @@ pub struct Cli {
 
 #[derive(Debug, Clone, Args)]
 pub struct GlobalArgs {
-    /// Ruta de la base SQLite (por defecto ~/.local/share/nicascan/nicascan.db)
-    #[arg(long, global = true, env = "NICASCAN_DB", value_name = "RUTA")]
+    /// Ruta de la base SQLite (por defecto ~/.local/share/businesscan/businesscan.db)
+    #[arg(long, global = true, env = "BUSINESSCAN_DB", value_name = "RUTA")]
     pub db: Option<PathBuf>,
 
     /// Desactiva colores ANSI
@@ -67,6 +65,10 @@ pub struct GlobalArgs {
     /// Sin mensajes de progreso ni adornos
     #[arg(short, long, global = true)]
     pub quiet: bool,
+
+    /// Idioma de consultas y etiquetas: es, en
+    #[arg(long, global = true, env = "BUSINESSCAN_LANG", default_value = "es")]
+    pub lang: crate::i18n::Language,
 }
 
 #[derive(Debug, Subcommand)]
@@ -133,23 +135,31 @@ impl From<SortArg> for SortBy {
 /// Argumentos de ubicación compartidos por scan, import y places.
 #[derive(Debug, Clone, Args, Default)]
 pub struct LocationArgs {
-    /// Lugar libre, por ejemplo "Barrio Martha Quezada, Managua"
+    /// Continente o región: central-america, europe, world…
+    #[arg(long)]
+    pub continent: Option<String>,
+
+    /// País: código ISO (NI, GT, PA…) o nombre
+    #[arg(short = 'C', long)]
+    pub country: Option<String>,
+
+    /// Lugar libre, por ejemplo "Managua" o "Antigua Guatemala"
     #[arg(short = 'p', long)]
     pub place: Option<String>,
 
-    /// Departamento o región autónoma
-    #[arg(short = 'd', long)]
-    pub departamento: Option<String>,
+    /// Departamento, provincia o estado
+    #[arg(short = 'd', long, visible_alias = "departamento")]
+    pub department: Option<String>,
 
-    /// Municipio
-    #[arg(short = 'm', long)]
-    pub municipio: Option<String>,
+    /// Ciudad o municipio
+    #[arg(short = 'm', long, visible_alias = "municipio")]
+    pub city: Option<String>,
 
-    /// Barrio o colonia
-    #[arg(long)]
-    pub barrio: Option<String>,
+    /// Barrio, colonia o vecindario
+    #[arg(long, visible_alias = "barrio")]
+    pub neighborhood: Option<String>,
 
-    /// Comarca
+    /// Comarca o aldea
     #[arg(long)]
     pub comarca: Option<String>,
 
@@ -169,10 +179,6 @@ pub struct LocationArgs {
     #[arg(long)]
     pub bbox: Option<String>,
 
-    /// Todo Nicaragua (puede ser una consulta grande)
-    #[arg(long = "all")]
-    pub all_nicaragua: bool,
-
     /// ID de área de Overpass (avanzado)
     #[arg(long)]
     pub osm_area_id: Option<i64>,
@@ -185,10 +191,12 @@ pub struct LocationArgs {
 impl LocationArgs {
     pub fn to_input(&self) -> LocationInput {
         LocationInput {
+            continent: self.continent.clone(),
+            country: self.country.clone(),
             place: self.place.clone(),
-            departamento: self.departamento.clone(),
-            municipio: self.municipio.clone(),
-            barrio: self.barrio.clone(),
+            department: self.department.clone(),
+            city: self.city.clone(),
+            neighborhood: self.neighborhood.clone(),
             comarca: self.comarca.clone(),
             lat: self.lat,
             lon: self.lon,
@@ -198,7 +206,6 @@ impl LocationArgs {
                 None
             },
             bbox: self.bbox.clone(),
-            all_nicaragua: self.all_nicaragua,
             osm_area_id: self.osm_area_id,
         }
     }
@@ -211,16 +218,24 @@ pub struct FilterArgs {
     #[arg(value_name = "TEXTO")]
     pub text: Vec<String>,
 
-    /// Departamento (nombre oficial o alias)
-    #[arg(short = 'd', long)]
+    /// País: código ISO o nombre
+    #[arg(short = 'C', long)]
+    pub country: Option<String>,
+
+    /// Continente o región: central-america, europe, world…
+    #[arg(long)]
+    pub continent: Option<String>,
+
+    /// Departamento, provincia o estado
+    #[arg(short = 'd', long, visible_alias = "departamento")]
     pub departamento: Option<String>,
 
-    /// Municipio
-    #[arg(short = 'm', long)]
+    /// Ciudad o municipio
+    #[arg(short = 'm', long, visible_alias = "municipio")]
     pub municipio: Option<String>,
 
     /// Barrio o comarca
-    #[arg(long)]
+    #[arg(long, visible_alias = "barrio")]
     pub barrio: Option<String>,
 
     /// Categoría o tipo de negocio
@@ -275,6 +290,8 @@ pub struct FilterArgs {
 impl FilterArgs {
     pub fn is_filtered(&self) -> bool {
         !self.text.is_empty()
+            || self.country.is_some()
+            || self.continent.is_some()
             || self.departamento.is_some()
             || self.municipio.is_some()
             || self.barrio.is_some()
@@ -305,17 +322,35 @@ impl FilterArgs {
             }
         }
         let gaz = Gazetteer::global();
-        let departamento = self.departamento.as_deref().map(|value| {
-            gaz.canonical_department(value)
-                .map(ToString::to_string)
-                .unwrap_or_else(|| value.to_string())
-        });
-        let municipio = self.municipio.as_deref().map(|value| {
-            gaz.canonical_municipality(value, departamento.as_deref())
-                .map(|(_, municipality)| municipality.to_string())
-                .unwrap_or_else(|| value.to_string())
-        });
+        let countries = if let Some(raw) = self.country.as_deref() {
+            let country = gaz.country(raw).ok_or_else(|| {
+                let suggestion = gaz
+                    .suggest_country(raw)
+                    .map(|country| format!(" ¿Quisiste decir «{}»?", country.name_es))
+                    .unwrap_or_default();
+                anyhow::anyhow!("País «{raw}» no reconocido.{suggestion}")
+            })?;
+            Some(vec![country.iso2.clone()])
+        } else if let Some(group) = self.continent.as_deref() {
+            let countries = gaz.countries_in_group(group).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Continente o región «{group}» no reconocido. Usa: {}",
+                    gaz.group_names().join(", ")
+                )
+            })?;
+            Some(
+                countries
+                    .into_iter()
+                    .map(|country| country.iso2.clone())
+                    .collect(),
+            )
+        } else {
+            None
+        };
+        let departamento = self.departamento.clone();
+        let municipio = self.municipio.clone();
         Ok(SearchQuery {
+            countries,
             text: {
                 let text = self.text.join(" ").trim().to_string();
                 if text.is_empty() {
@@ -368,7 +403,8 @@ pub fn init_logging(verbose: u8, quiet: bool) {
 }
 
 pub async fn run(cli: Cli) -> Result<i32> {
-    let config = Config::load(cli.global.db.clone())?;
+    let mut config = Config::load(cli.global.db.clone())?;
+    config.language = cli.global.lang;
     let theme = Theme::new(cli.global.no_color);
 
     match cli.command {
@@ -406,7 +442,7 @@ fn init_command(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i
         println!();
         println!(
             "  {}",
-            theme.muted("Siguiente: nicascan scan --place \"León\" --source osm")
+            theme.muted("Siguiente: businesscan scan --place \"León\" --country NI --source osm")
         );
         println!();
     }
@@ -416,16 +452,6 @@ fn init_command(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i
 pub fn open_db(config: &Config) -> Result<Database> {
     Database::open(&config.db_path)
         .with_context(|| format!("No se pudo abrir la base {}", config.db_path.display()))
-}
-
-pub fn canonical_admin(value: Option<&str>) -> Option<String> {
-    let value = value?;
-    Some(
-        Gazetteer::global()
-            .canonical_department(value)
-            .map(ToString::to_string)
-            .unwrap_or_else(|| value.trim().to_string()),
-    )
 }
 
 pub fn normalize_place_filter(value: &str) -> String {

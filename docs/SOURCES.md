@@ -1,6 +1,6 @@
 # Fuentes, mapeo y políticas
 
-NicaScan normaliza cada fuente a un `BusinessRecord`. Aquí está qué se toma de
+BusinessCan normaliza cada fuente a un `BusinessRecord`. Aquí está qué se toma de
 cada una y qué límites aplicar.
 
 ## OpenStreetMap (Overpass)
@@ -18,7 +18,7 @@ cada una y qué límites aplicar.
 
 ### Mapeo de etiquetas
 
-| Campo NicaScan | Etiquetas OSM |
+| Campo BusinessCan | Etiquetas OSM |
 |---|---|
 | Nombre | `name`, `name:es`, `official_name`, `brand`, `operator` |
 | Alias | `name:es`, `alt_name`, `official_name`, `short_name`, `loc_name`, `old_name`, `brand`, `operator` |
@@ -57,7 +57,7 @@ un nombre sintético). No se inventan teléfonos ni correos.
 - **Límite**: ~1 req/s; User-Agent con contacto.
 - **Política**: <https://operations.osmfoundation.org/policies/nominatim/>.
 - En instalaciones grandes, configura tu propia instancia con
-  `NICASCAN_NOMINATIM_URL`.
+  `BUSINESSCAN_NOMINATIM_URL`.
 
 ## Google Places API (New)
 
@@ -95,7 +95,7 @@ un nombre sintético). No se inventan teléfonos ni correos.
 ## Overture Maps (PMTiles automático)
 
 Overture publica Places como PMTiles en
-`https://tiles.overturemaps.org/<release>/places.pmtiles`. NicaScan:
+`https://tiles.overturemaps.org/<release>/places.pmtiles`. BusinessCan:
 
 1. Descubre la release `latest` en `https://stac.overturemaps.org/catalog.json`.
 2. Abre el PMTiles con HTTP Range (header y directorios).
@@ -104,9 +104,9 @@ Overture publica Places como PMTiles en
    `websites`, `socials`, `confidence`, `id` y estado.
 
 ```bash
-nicascan overture latest
-nicascan overture fetch --departamento León --limit 300
-nicascan overture fetch --lat 12.1364 --lon -86.2514 --radius 1000 --limit 100
+businesscan overture latest
+businesscan overture fetch --country NI --department León --limit 300
+businesscan overture fetch --lat 12.1364 --lon -86.2514 --radius 1000 --limit 100
 ```
 
 El PMTiles público está poblado en zoom 14. Para áreas muy grandes (país entero)
@@ -117,7 +117,7 @@ fallar.
 ## Overture Maps (GeoJSON local, alternativa)
 
 Overture también publica `theme=places/type=place` como GeoParquet en
-`s3://overturemaps-us-west-2/release/...`. NicaScan puede leer un **extracto
+`s3://overturemaps-us-west-2/release/...`. BusinessCan puede leer un **extracto
 GeoJSON/JSONL** ya filtrado por tu zona.
 
 Extracción típica con DuckDB (requiere extensión `spatial` y acceso a S3):
@@ -135,7 +135,7 @@ COPY (
 Luego:
 
 ```bash
-nicascan scan --all --source overture --overture-file overture-managua.geojson
+businesscan scan --country NI --source overture --overture-file overture-managua.geojson
 ```
 
 Esta vía es la recomendada para país completo o para trabajar sin red después
@@ -164,7 +164,7 @@ CDLA-Permissive 2.0 de Overture y las atribuciones de sus fuentes.
 
 ## Enriquecimiento web (`source=web`)
 
-`nicascan enrich` visita el sitio del negocio y añade una observación con
+`businesscan enrich` visita el sitio del negocio y añade una observación con
 `source='web'`:
 
 - JSON-LD `LocalBusiness`/`Restaurant`/`Store`/`Organization`: nombre, teléfono,
@@ -175,7 +175,7 @@ CDLA-Permissive 2.0 de Overture y las atribuciones de sus fuentes.
 
 Límites: `robots.txt` por origen (si no se puede leer, se omite el sitio),
 `Crawl-delay`, pausa de 2 s por host, máximo 2 MB por página, solo HTTP/HTTPS y
-bloqueo de IPs privadas. Configura la pausa con `NICASCAN_ENRICH_DELAY_MS`.
+bloqueo de IPs privadas. Configura la pausa con `BUSINESSCAN_ENRICH_DELAY_MS`.
 La confianza de una observación web es 0.55–0.78 según JSON-LD y contactos.
 
 ## Importación CSV/JSON/JSONL

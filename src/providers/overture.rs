@@ -1,6 +1,6 @@
 //! Fuente Overture Maps desde un archivo GeoJSON/JSONL local.
 //!
-//! Overture publica Places como GeoParquet en S3. Para mantener NicaScan
+//! Overture publica Places como GeoParquet en S3. Para mantener BusinessCan
 //! portable (Termux incluido), esta fuente lee un extracto GeoJSON producido
 //! por DuckDB o cualquier herramienta GIS. Ver docs/SOURCES.md.
 
@@ -16,7 +16,7 @@ use crate::config::Config;
 use crate::location::{GeoFilter, ResolvedLocation};
 use crate::model::{Address, BusinessRecord, Contact, ContactKind};
 use crate::normalize::{
-    domain_of, haversine_m, normalize_email, normalize_phone, normalize_social, normalize_text,
+    domain_of, haversine_m, normalize_email, normalize_phone_for, normalize_social, normalize_text,
     normalize_url, stable_hash,
 };
 use crate::providers::categories::matches_category_text;
@@ -93,9 +93,12 @@ pub async fn fetch_file(path: &Path, request: &ProviderRequest) -> Result<Vec<Bu
         if !in_location(lon, lat, &request.location) {
             continue;
         }
-        let Some(record) = feature_to_record(feature, lon, lat) else {
+        let Some(mut record) = feature_to_record(feature, lon, lat) else {
             continue;
         };
+        if record.address.country_code.is_none() {
+            record.address.country_code = request.location.country_code.clone();
+        }
         if !categories.is_empty()
             && !categories.iter().any(|term| {
                 matches_category_text(
@@ -270,10 +273,26 @@ pub fn feature_to_record(feature: &Value, lon: f64, lat: f64) -> Option<Business
         .as_deref()
         .map(|value| format!("overture.category={value}"));
 
+    let country_hint = properties
+        .get("addresses")
+        .and_then(Value::as_array)
+        .and_then(|addresses| addresses.first())
+        .and_then(|address| address.get("country"))
+        .and_then(Value::as_str)
+        .map(|value| {
+            if value.len() == 2 {
+                value.to_uppercase()
+            } else {
+                crate::gazetteer::Gazetteer::global()
+                    .country(value)
+                    .map(|country| country.iso2.clone())
+                    .unwrap_or_else(|| value.to_string())
+            }
+        });
     let mut contacts = Vec::new();
     let mut first_phone = true;
     for value in json_strings(properties.get("phones")) {
-        if let Some(phone) = normalize_phone(&value) {
+        if let Some(phone) = normalize_phone_for(&value, country_hint.as_deref()) {
             let mut contact = Contact::new(ContactKind::Phone, phone).with_source("overture");
             if first_phone {
                 contact = contact.primary();
@@ -551,6 +570,9 @@ mod tests {
             location: ResolvedLocation {
                 query: "Managua".into(),
                 display_name: "Managua, Nicaragua".into(),
+                country_code: Some("NI".into()),
+                country_name: Some("Nicaragua".into()),
+                continent: Some("North America".into()),
                 departamento: Some("Managua".into()),
                 municipio: Some("Managua".into()),
                 barrio: None,
@@ -574,6 +596,7 @@ mod tests {
             category: None,
             limit: None,
             include_unnamed: false,
+            language: crate::i18n::Language::Es,
             page_size: 20,
             max_pages: 1,
         }

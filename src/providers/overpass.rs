@@ -1,7 +1,7 @@
 //! Fuente OpenStreetMap vía Overpass API.
 //!
-//! Es la fuente base: no requiere clave, cubre todo Nicaragua y trae etiquetas
-//! de contacto, horarios, dirección, redes sociales y categorías.
+//! Es la fuente base: no requiere clave, cubre el mundo vía Overpass y trae
+//! etiquetas de contacto, horarios, dirección, redes sociales y categorías.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -202,10 +202,6 @@ fn geo_clause(location: &ResolvedLocation) -> (Option<String>, String) {
                 "(area.search_area)".to_string(),
             )
         }
-        GeoFilter::Country => (
-            Some("area(3600287666)->.search_area;".to_string()),
-            "(area.search_area)".to_string(),
-        ),
         GeoFilter::OverpassArea { area_id } => (
             Some(format!("area({area_id})->.search_area;")),
             "(area.search_area)".to_string(),
@@ -244,7 +240,7 @@ fn map_element(element: &OverpassElement, request: &ProviderRequest) -> Option<B
 
     let (category_key, category_value) = pick_category(tags)?;
     let business_type = format!("{category_key}={category_value}");
-    let primary_category = category_label(&category_key, &category_value);
+    let primary_category = category_label(&category_key, &category_value, request.language);
 
     let mut aliases = Vec::new();
     for key in [
@@ -269,7 +265,7 @@ fn map_element(element: &OverpassElement, request: &ProviderRequest) -> Option<B
     let mut categories = Vec::new();
     for key in BUSINESS_KEYS {
         if let Some(value) = tags.get(*key) {
-            let label = category_label(key, value);
+            let label = category_label(key, value, request.language);
             if !label.is_empty() && !categories.contains(&label) {
                 categories.push(label);
             }
@@ -396,8 +392,8 @@ fn map_element(element: &OverpassElement, request: &ProviderRequest) -> Option<B
         postal_code: tags.get("addr:postcode").cloned(),
         country_code: tags
             .get("addr:country")
-            .cloned()
-            .or_else(|| Some("NI".to_string())),
+            .and_then(|value| crate::gazetteer::Gazetteer::global().normalize_country_code(value))
+            .or_else(|| request.location.country_code.clone()),
     };
 
     if address.departamento.is_none() {
@@ -552,6 +548,9 @@ mod tests {
         ResolvedLocation {
             query: "León".into(),
             display_name: "León, Nicaragua".into(),
+            country_code: Some("NI".into()),
+            country_name: Some("Nicaragua".into()),
+            continent: Some("North America".into()),
             departamento: Some("León".into()),
             municipio: Some("León".into()),
             barrio: None,
@@ -614,6 +613,7 @@ mod tests {
             category: None,
             limit: None,
             include_unnamed: false,
+            language: crate::i18n::Language::Es,
             page_size: 20,
             max_pages: 1,
         };

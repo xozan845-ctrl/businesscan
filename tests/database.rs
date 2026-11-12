@@ -1,7 +1,7 @@
-use nicascan::db::business::{get_full, import_batch, merge_businesses, search};
-use nicascan::db::Database;
-use nicascan::model::{BusinessRecord, Contact, ContactKind, SearchQuery, SortBy};
-use nicascan::normalize::normalize_phone;
+use businesscan::db::business::{get_full, import_batch, merge_businesses, search};
+use businesscan::db::Database;
+use businesscan::model::{BusinessRecord, Contact, ContactKind, SearchQuery, SortBy};
+use businesscan::normalize::normalize_phone;
 
 fn record(source: &str, external_id: &str, name: &str) -> BusinessRecord {
     let mut record = BusinessRecord::new(source, name);
@@ -120,11 +120,14 @@ fn merges_duplicates_by_phone_and_keeps_both_sources() {
     google.address.barrio = None;
 
     let results = import_batch(&mut db, &[osm, google]).unwrap();
-    assert_eq!(results[0].action, nicascan::model::UpsertAction::Inserted);
-    assert_eq!(results[1].action, nicascan::model::UpsertAction::Merged);
+    assert_eq!(
+        results[0].action,
+        businesscan::model::UpsertAction::Inserted
+    );
+    assert_eq!(results[1].action, businesscan::model::UpsertAction::Merged);
     assert_eq!(
         results[1].match_reason,
-        Some(nicascan::model::MatchReason::Phone)
+        Some(businesscan::model::MatchReason::Phone)
     );
 
     let all = search(&db, &SearchQuery::default()).unwrap();
@@ -134,7 +137,7 @@ fn merges_duplicates_by_phone_and_keeps_both_sources() {
     assert_eq!(all[0].review_count, Some(200));
     assert_eq!(all[0].website.as_deref(), Some("https://pizzanostra.ni"));
 
-    let full = get_full(&db, nicascan::normalize::short_id(&all[0].id), false).unwrap();
+    let full = get_full(&db, businesscan::normalize::short_id(&all[0].id), false).unwrap();
     assert_eq!(full.sources.len(), 2);
     assert_eq!(full.contacts.len(), 3);
     assert!(full
@@ -203,4 +206,30 @@ fn finds_and_merges_manual_duplicates() {
     let full = get_full(&db, &kept, false).unwrap();
     assert_eq!(full.contacts.len(), 2);
     assert_eq!(full.sources.len(), 2);
+}
+
+#[test]
+fn filters_international_records_by_country() {
+    let mut db = Database::open_memory().unwrap();
+    let mut gt = record("osm", "node/gt-1", "Café Antigua");
+    gt.address.country_code = Some("GT".into());
+    gt.address.municipio = Some("Antigua Guatemala".into());
+    gt.address.departamento = Some("Sacatepéquez".into());
+    let mut ni = record("osm", "node/ni-1", "Café Managua");
+    ni.address.country_code = Some("NI".into());
+    import_batch(&mut db, &[gt, ni]).unwrap();
+
+    let query = SearchQuery {
+        countries: Some(vec!["GT".into()]),
+        ..Default::default()
+    };
+    let results = search(&db, &query).unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].address.country_code.as_deref(), Some("GT"));
+
+    let query = SearchQuery {
+        countries: Some(vec!["CR".into()]),
+        ..Default::default()
+    };
+    assert!(search(&db, &query).unwrap().is_empty());
 }

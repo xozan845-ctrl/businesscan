@@ -19,7 +19,8 @@ use url::Url;
 use crate::http::HttpClient;
 use crate::model::{Address, Business, BusinessRecord, Contact, ContactKind};
 use crate::normalize::{
-    domain_of, normalize_email, normalize_phone, normalize_social, normalize_text, normalize_url,
+    domain_of, normalize_email, normalize_phone_for, normalize_social, normalize_text,
+    normalize_url,
 };
 
 const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
@@ -409,7 +410,7 @@ fn parse_robots(body: &str) -> RobotsRules {
         group
             .agents
             .iter()
-            .any(|agent| agent != "*" && "nicascan".contains(agent.as_str()))
+            .any(|agent| agent != "*" && "businesscan".contains(agent.as_str()))
     });
     let wildcard = groups
         .iter()
@@ -624,7 +625,7 @@ fn parse_page(html: &str, page_url: &Url) -> ParsedPage {
             continue;
         }
         if let Some(rest) = lower.strip_prefix("tel:") {
-            if normalize_phone(rest).is_some() {
+            if normalize_phone_for(rest, None).is_some() {
                 push_unique(&mut extracted.phones, vec![rest.to_string()]);
             }
             continue;
@@ -862,10 +863,20 @@ fn build_record(
     pages: &[String],
     extracted: &Extracted,
 ) -> BusinessRecord {
+    let mut address = extracted.address.clone();
+    if address.country_code.is_none() {
+        address.country_code = business.address.country_code.clone();
+    }
+    if let Some(country) = address.country_code.as_deref() {
+        address.country_code = crate::gazetteer::Gazetteer::global()
+            .normalize_country_code(country)
+            .or_else(|| Some(country.to_string()));
+    }
+
     let mut contacts = Vec::new();
     let mut first_phone = true;
     for value in &extracted.phones {
-        if let Some(normalized) = normalize_phone(value) {
+        if let Some(normalized) = normalize_phone_for(value, address.country_code.as_deref()) {
             let mut contact = Contact::new(ContactKind::Phone, normalized).with_source("web");
             contact.label = Some("Teléfono (web)".to_string());
             if first_phone {
@@ -877,7 +888,7 @@ fn build_record(
     }
     let mut first_whatsapp = true;
     for value in &extracted.whatsapps {
-        if let Some(normalized) = normalize_phone(value) {
+        if let Some(normalized) = normalize_phone_for(value, address.country_code.as_deref()) {
             let mut contact = Contact::new(ContactKind::Whatsapp, normalized).with_source("web");
             if first_whatsapp {
                 contact = contact.primary();
@@ -919,14 +930,6 @@ fn build_record(
     for (kind, value) in &extracted.socials {
         if let Some(normalized) = normalize_social(kind.as_str(), value) {
             contacts.push(Contact::new(*kind, normalized).with_source("web"));
-        }
-    }
-
-    let mut address = extracted.address.clone();
-    if let Some(country) = address.country_code.as_deref() {
-        let country = normalize_text(country);
-        if country == "nicaragua" || country == "ni" {
-            address.country_code = Some("NI".to_string());
         }
     }
 
@@ -1201,7 +1204,7 @@ fn extract_whatsapp_phone(value: &str) -> Option<String> {
     if digits.len() < 8 {
         return None;
     }
-    normalize_phone(&digits)
+    normalize_phone_for(&digits, None)
 }
 
 fn is_noise_email(email: &str) -> bool {
@@ -1232,7 +1235,7 @@ mod tests {
             Disallow: /privado
             Allow: /privado/publico
 
-            User-agent: nicascan
+            User-agent: businesscan
             Disallow: /no
             Crawl-delay: 3
         ";

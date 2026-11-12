@@ -11,18 +11,19 @@
 - **Foursquare Places API** — datos y términos de Foursquare. Requiere clave;
   revisa el plan y las restricciones de uso.
 - **Overture Maps** — datos de lugares bajo CDLA-Permissive 2.0 y las licencias
-  de sus fuentes. Ver <https://overturemaps.org/>. NicaScan lee un extracto
+  de sus fuentes. Ver <https://overturemaps.org/>. BusinessCan lee un extracto
   local producido por el usuario; no redistribuye el dataset.
 
-## Gacetero de Nicaragua
+## Gacetero internacional
 
-`assets/nicaragua.json` contiene los 17 departamentos/regiones y sus 153
-municipios. Fue adaptado de:
+`assets/countries.json` contiene 250 países/territorios con nombres en español e
+inglés, bbox y código telefónico. Se generó a partir de:
 
-- <https://github.com/nodenica/node-nicaragua-municipalities> (MIT)
+- <https://github.com/mledoze/countries> (ODbL)
+- Natural Earth 1:110m admin 0 countries (dominio público)
 
-Se usa para validar y canonicalizar nombres escritos por el usuario. No contiene
-datos personales ni coordenadas.
+No contiene datos personales. Los departamentos, ciudades y barrios se resuelven
+en línea con Nominatim; no se distribuye un gacetero administrativo de cada país.
 
 ## Dependencias de Rust
 

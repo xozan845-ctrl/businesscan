@@ -128,11 +128,13 @@ impl Provider for GooglePlacesProvider {
 fn build_body(text_query: &str, request: &ProviderRequest, page_token: Option<&str>) -> Value {
     let mut body = json!({
         "textQuery": text_query,
-        "languageCode": "es",
-        "regionCode": "NI",
+        "languageCode": request.language.code(),
         "pageSize": 20,
         "rankPreference": "RELEVANCE"
     });
+    if let Some(country) = request.location.country_code.as_deref() {
+        body["regionCode"] = json!(country.to_uppercase());
+    }
 
     if let Some(token) = page_token {
         body["pageToken"] = json!(token);
@@ -228,10 +230,10 @@ pub fn map_place(place: &Value, request: &ProviderRequest) -> Option<BusinessRec
         .get("internationalPhoneNumber")
         .and_then(Value::as_str)
     {
-        if !contacts
-            .iter()
-            .any(|c| crate::normalize::phone_key(&c.value) == crate::normalize::phone_key(phone))
-        {
+        if !contacts.iter().any(|c| {
+            crate::normalize::phone_key_for(&c.value, request.location.country_code.as_deref())
+                == crate::normalize::phone_key_for(phone, request.location.country_code.as_deref())
+        }) {
             contacts.push(Contact::new(ContactKind::Phone, phone).with_source("google"));
         }
     }
@@ -248,7 +250,7 @@ pub fn map_place(place: &Value, request: &ProviderRequest) -> Option<BusinessRec
             .get("formattedAddress")
             .and_then(Value::as_str)
             .map(ToString::to_string),
-        country_code: Some("NI".to_string()),
+        country_code: request.location.country_code.clone(),
         ..Default::default()
     };
     if let Some(components) = place.get("addressComponents").and_then(Value::as_array) {
@@ -286,8 +288,14 @@ pub fn map_place(place: &Value, request: &ProviderRequest) -> Option<BusinessRec
                     .or_else(|| long.map(ToString::to_string));
             } else if types.contains(&"country") {
                 address.country_code = short
-                    .map(|s| s.to_uppercase())
-                    .or_else(|| long.map(ToString::to_string));
+                    .and_then(|value| {
+                        crate::gazetteer::Gazetteer::global().normalize_country_code(value)
+                    })
+                    .or_else(|| {
+                        long.and_then(|value| {
+                            crate::gazetteer::Gazetteer::global().normalize_country_code(value)
+                        })
+                    });
             }
         }
     }
@@ -459,6 +467,9 @@ mod tests {
             location: ResolvedLocation {
                 query: "Managua".into(),
                 display_name: "Managua, Nicaragua".into(),
+                country_code: Some("NI".into()),
+                country_name: Some("Nicaragua".into()),
+                continent: Some("North America".into()),
                 departamento: Some("Managua".into()),
                 municipio: Some("Managua".into()),
                 barrio: None,
@@ -478,6 +489,7 @@ mod tests {
             category: None,
             limit: None,
             include_unnamed: false,
+            language: crate::i18n::Language::Es,
             page_size: 20,
             max_pages: 1,
         }

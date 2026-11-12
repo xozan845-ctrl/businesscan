@@ -1,4 +1,4 @@
-//! `nicascan search`: consulta la base local.
+//! `businesscan search`: consulta la base local.
 
 use anyhow::Result;
 use clap::Args;
@@ -44,7 +44,7 @@ pub fn run(args: SearchArgs, config: &Config, global: &GlobalArgs, theme: &Theme
         );
         println!(
             "  {}",
-            theme.muted("Prueba con menos filtros o ejecuta `nicascan scan --place \"...\"`.")
+            theme.muted("Prueba con menos filtros o ejecuta `businesscan scan --place \"...\"`.")
         );
         println!();
         return Ok(0);
@@ -63,7 +63,7 @@ pub fn run(args: SearchArgs, config: &Config, global: &GlobalArgs, theme: &Theme
             "  {} {}",
             theme.muted(format!("Mostrando {start}–{end}")),
             if results.len() == args.limit {
-                theme.muted("· usa --offset para ver más o `nicascan export`")
+                theme.muted("· usa --offset para ver más o `businesscan export`")
             } else {
                 String::new()
             }

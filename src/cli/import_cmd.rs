@@ -1,4 +1,4 @@
-//! `nicascan import`: datos de terceros en CSV, JSON o JSONL.
+//! `businesscan import`: datos de terceros en CSV, JSON o JSONL.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -34,11 +34,15 @@ pub struct ImportArgs {
     #[arg(long, value_parser = parse_delimiter)]
     pub delimiter: Option<u8>,
 
+    /// País por defecto si el archivo no lo trae (ISO o nombre)
+    #[arg(short = 'C', long)]
+    pub country: Option<String>,
+
     /// Departamento por defecto si el archivo no lo trae
     #[arg(short = 'd', long)]
     pub departamento: Option<String>,
 
-    /// Municipio por defecto si el archivo no lo trae
+    /// Ciudad/municipio por defecto si el archivo no lo trae
     #[arg(short = 'm', long)]
     pub municipio: Option<String>,
 
@@ -93,6 +97,7 @@ pub fn run(args: ImportArgs, config: &Config, global: &GlobalArgs, theme: &Theme
         None => ImportFormat::detect(&args.archivo),
     };
     let hints = build_hints(
+        args.country.as_deref(),
         args.departamento.as_deref(),
         args.municipio.as_deref(),
         args.barrio.as_deref(),
@@ -204,7 +209,7 @@ pub fn run(args: ImportArgs, config: &Config, global: &GlobalArgs, theme: &Theme
             println!(
                 "  {}",
                 theme.muted(format!(
-                    "Consulta con `nicascan search --source {}` o exporta con `nicascan export`.",
+                    "Consulta con `businesscan search --source {}` o exporta con `businesscan export`.",
                     args.source
                 ))
             );
@@ -215,6 +220,7 @@ pub fn run(args: ImportArgs, config: &Config, global: &GlobalArgs, theme: &Theme
 }
 
 fn build_hints(
+    country: Option<&str>,
     departamento: Option<&str>,
     municipio: Option<&str>,
     barrio: Option<&str>,
@@ -223,25 +229,14 @@ fn build_hints(
     lon: Option<f64>,
 ) -> Result<ResolvedLocation> {
     let gaz = Gazetteer::global();
-    let departamento = match departamento {
-        Some(value) => Some(
-            gaz.canonical_department(value)
-                .map(ToString::to_string)
-                .or_else(|| gaz.suggest_department(value).map(ToString::to_string))
-                .with_context(|| format!("Departamento «{value}» no reconocido"))?,
-        ),
-        None => None,
-    };
-    let municipio = match municipio {
-        Some(value) => Some(
-            gaz.canonical_municipality(value, departamento.as_deref())
-                .map(|(_, name)| name.to_string())
-                .or_else(|| {
-                    gaz.suggest_municipality(value)
-                        .map(|(_, name)| name.to_string())
-                })
-                .with_context(|| format!("Municipio «{value}» no reconocido"))?,
-        ),
+    let country = match country {
+        Some(value) => Some(gaz.country(value).ok_or_else(|| {
+            let suggestion = gaz
+                .suggest_country(value)
+                .map(|country| format!(" ¿Quisiste decir «{}»?", country.name_es))
+                .unwrap_or_default();
+            anyhow::anyhow!("País «{value}» no reconocido.{suggestion}")
+        })?),
         None => None,
     };
 
@@ -249,13 +244,17 @@ fn build_hints(
     for value in [
         barrio,
         comarca,
-        municipio.as_deref(),
-        departamento.as_deref(),
+        municipio,
+        departamento,
+        country.map(|country| country.name_es.as_str()),
     ]
     .into_iter()
     .flatten()
     {
-        if !parts.iter().any(|p: &String| p.eq_ignore_ascii_case(value)) {
+        if !parts
+            .iter()
+            .any(|part: &String| part.eq_ignore_ascii_case(value))
+        {
             parts.push(value.to_string());
         }
     }
@@ -271,15 +270,31 @@ fn build_hints(
             lon,
             radius_m: 1_000.0,
         }
+    } else if let Some(country) = country {
+        let bbox = country.bbox_or_point();
+        GeoFilter::Bbox {
+            south: bbox[1],
+            west: bbox[0],
+            north: bbox[3],
+            east: bbox[2],
+        }
     } else {
-        GeoFilter::Country
+        GeoFilter::Bbox {
+            south: -90.0,
+            west: -180.0,
+            north: 90.0,
+            east: 180.0,
+        }
     };
 
     Ok(ResolvedLocation {
         query: display_name.clone(),
         display_name,
-        departamento,
-        municipio,
+        country_code: country.map(|country| country.iso2.clone()),
+        country_name: country.map(|country| country.name_es.clone()),
+        continent: country.and_then(|country| country.continent.clone()),
+        departamento: departamento.map(ToString::to_string),
+        municipio: municipio.map(ToString::to_string),
         barrio: barrio.map(ToString::to_string),
         comarca: comarca.map(ToString::to_string),
         filter,

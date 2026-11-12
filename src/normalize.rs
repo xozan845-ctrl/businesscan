@@ -99,8 +99,14 @@ pub fn clean_str(value: &str) -> Option<String> {
     }
 }
 
-/// Teléfono en formato E.164 cuando es posible. Para Nicaragua usa +505.
+/// Teléfono en formato E.164 cuando es posible. Sin país se conserva el
+/// comportamiento histórico de Nicaragua (+505) solo como último recurso.
 pub fn normalize_phone(raw: &str) -> Option<String> {
+    normalize_phone_for(raw, None)
+}
+
+/// Normaliza un teléfono usando el país del negocio (ISO2).
+pub fn normalize_phone_for(raw: &str, country_code: Option<&str>) -> Option<String> {
     let mut digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
     if digits.is_empty() {
         return None;
@@ -111,19 +117,42 @@ pub fn normalize_phone(raw: &str) -> Option<String> {
         let before = &raw[..idx];
         digits = before.chars().filter(|c| c.is_ascii_digit()).collect();
     }
-
     if digits.len() > 15 {
         digits.truncate(15);
     }
 
-    if digits.len() == 8 {
-        return Some(format!("+505{digits}"));
+    let explicit = raw.trim_start().starts_with('+')
+        || digits.starts_with("00")
+        || raw.trim_start().starts_with("00");
+    if digits.starts_with("00") {
+        digits = digits[2..].to_string();
     }
+
+    if explicit {
+        return Some(format!("+{digits}"));
+    }
+
+    let calling = country_code
+        .and_then(|code| crate::gazetteer::Gazetteer::global().country_by_iso2(code))
+        .map(|country| country.calling_code.trim_start_matches('+').to_string());
+
+    if let Some(calling) = calling {
+        if !calling.is_empty() {
+            if digits.starts_with(&calling) && digits.len() > calling.len() + 5 {
+                return Some(format!("+{digits}"));
+            }
+            // Números locales de Centroamérica y países con troncales cortos.
+            if digits.len() >= 7 && digits.len() <= 10 {
+                return Some(format!("+{calling}{digits}"));
+            }
+        }
+    }
+
     if digits.len() == 11 && digits.starts_with("505") {
         return Some(format!("+{digits}"));
     }
-    if digits.starts_with("00") && digits.len() > 10 {
-        return Some(format!("+{}", &digits[2..]));
+    if digits.len() == 8 {
+        return Some(format!("+505{digits}"));
     }
     if digits.len() >= 8 {
         return Some(format!("+{digits}"));
@@ -131,14 +160,18 @@ pub fn normalize_phone(raw: &str) -> Option<String> {
     None
 }
 
-/// Clave de comparación de teléfonos: para Nicaragua, los últimos 8 dígitos;
-/// para números internacionales, el número completo.
+/// Clave de comparación de teléfonos. Para Nicaragua conserva los 8 dígitos
+/// nacionales por compatibilidad; para el resto usa el E.164 completo.
 pub fn phone_key(raw: &str) -> Option<String> {
-    let normalized = normalize_phone(raw)?;
+    phone_key_for(raw, None)
+}
+
+pub fn phone_key_for(raw: &str, country_code: Option<&str>) -> Option<String> {
+    let normalized = normalize_phone_for(raw, country_code)?;
     let digits: String = normalized.chars().filter(|c| c.is_ascii_digit()).collect();
     if digits.starts_with("505") && digits.len() == 11 {
         Some(digits[3..].to_string())
-    } else if digits.len() >= 8 {
+    } else if digits.len() >= 7 {
         Some(digits)
     } else {
         None
@@ -448,6 +481,22 @@ mod tests {
         );
         assert_eq!(phone_key("+505 8888-7777").as_deref(), Some("88887777"));
         assert_eq!(normalize_phone("123"), None);
+    }
+
+    #[test]
+    fn phones_use_the_business_country() {
+        assert_eq!(
+            normalize_phone_for("8888 7777", Some("GT")).as_deref(),
+            Some("+50288887777")
+        );
+        assert_eq!(
+            normalize_phone_for("+501 1234567", Some("BZ")).as_deref(),
+            Some("+5011234567")
+        );
+        assert_eq!(
+            phone_key_for("8888 7777", Some("GT")).as_deref(),
+            Some("50288887777")
+        );
     }
 
     #[test]

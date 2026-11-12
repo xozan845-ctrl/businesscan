@@ -1,10 +1,10 @@
-# Arquitectura de NicaScan
+# Arquitectura de BusinessCan
 
 ## Flujo general
 
 ```
                      ┌────────────────────┐
-  nicascan scan ───▶ │ LocationResolver   │
+  businesscan scan ───▶ │ LocationResolver   │
                      │ Nominatim + caché  │
                      └─────────┬──────────┘
                                │ ResolvedLocation
@@ -47,7 +47,8 @@ lotes de 200 registros dentro de una transacción.
 | `src/config.rs` | Rutas, claves, endpoints, timeouts y User-Agent. |
 | `src/http.rs` | Cliente reqwest, reintentos con backoff, rate limiter. |
 | `src/location.rs` | `LocationInput` → `ResolvedLocation`; Nominatim search/reverse y filtros geográficos. |
-| `src/gazetteer.rs` | 17 departamentos/regiones y 153 municipios para validar nombres. |
+| `src/i18n.rs` | Español/inglés para consultas, etiquetas y nombres de países. |
+| `src/gazetteer.rs` | 250 países/territorios, continentes, subregiones y códigos telefónicos. |
 | `src/normalize.rs` | Sin acentos, teléfonos E.164, URLs, redes, geohash, Haversine, FTS. |
 | `src/providers/` | Adaptadores de fuentes (OSM, Google, Foursquare, Overture, import). |
 | `src/enrich.rs` | Enriquecimiento web: robots, JSON-LD, meta, enlaces y SSRF. |
@@ -141,14 +142,23 @@ humana.
 
 ## Geocodificación
 
-1. `--lat/--lon` + `--radius`: filtro `around` de Overpass. Si faltan datos
+1. `--continent`: resuelve el grupo (Centroamérica, Europa, mundo…) con el
+   gacetero y produce una ubicación por país. Para grupos pequeños usa el área
+   precisa de Nominatim; para grupos grandes usa el bbox del país (sin hacer
+   cientos de llamadas).
+2. `--country`: acepta ISO2/ISO3 o nombre en español/inglés. Si no hay más
+   detalle, resuelve el área del país; si hay ciudad/departamento, geocodifica
+   el conjunto.
+3. `--lat/--lon` + `--radius`: filtro `around` de Overpass. Si faltan datos
    administrativos, se hace **reverse** una vez y se cachea.
-2. `--bbox`: filtro de caja.
-3. `--osm-area-id`: área avanzada de Overpass.
-4. `--all`: relación OSM de Nicaragua (287666), área 3600287666.
-5. Departamento/municipio/barrio/comarca/`--place`: Nominatim search, elegido
+4. `--bbox`: filtro de caja.
+5. `--osm-area-id`: área avanzada de Overpass.
+6. Departamento/ciudad/barrio/comarca/`--place`: Nominatim search, elegido
    según el nivel pedido. Una relación administrativa se convierte en
    `area(3600000000 + relation_id)`; un nodo de barrio se convierte en `around`.
+
+`assets/countries.json` contiene 250 países/territorios con nombres es/en,
+bbox aproximado de Natural Earth y código telefónico.`
 
 Las respuestas de Nominatim se guardan en `places` con una clave normalizada.
 `--refresh-place` fuerza una consulta nueva. El rate limiter espera ~1.1 s entre
@@ -217,7 +227,7 @@ Hay dos caminos:
 - revisión de duplicados (`/v1/duplicates`) y fusión (`/v1/merge`),
 - resumen de cobertura/calidad.
 
-Si hay `NICASCAN_API_TOKEN`, el panel pide el token y lo guarda en
+Si hay `BUSINESSCAN_API_TOKEN`, el panel pide el token y lo guarda en
 `localStorage` para enviar `Authorization: Bearer`.
 
 ## API

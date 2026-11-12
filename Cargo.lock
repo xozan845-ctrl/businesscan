@@ -301,6 +301,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
+name = "businesscan"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "async-trait",
+ "axum",
+ "bytes",
+ "chrono",
+ "clap",
+ "comfy-table",
+ "csv",
+ "directories",
+ "encoding_rs",
+ "env_logger",
+ "flate2",
+ "indicatif",
+ "log",
+ "mapbox_vector_tile",
+ "owo-colors",
+ "predicates",
+ "regex 1.13.1",
+ "reqwest",
+ "rusqlite",
+ "scraper",
+ "serde",
+ "serde_json",
+ "strsim",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tower-http",
+ "ulid",
+ "unicode-normalization",
+ "url",
+ "zstd",
+]
+
+[[package]]
 name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1437,45 +1476,6 @@ name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
-
-[[package]]
-name = "nicascan"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "async-trait",
- "axum",
- "bytes",
- "chrono",
- "clap",
- "comfy-table",
- "csv",
- "directories",
- "encoding_rs",
- "env_logger",
- "flate2",
- "indicatif",
- "log",
- "mapbox_vector_tile",
- "owo-colors",
- "predicates",
- "regex 1.13.1",
- "reqwest",
- "rusqlite",
- "scraper",
- "serde",
- "serde_json",
- "strsim",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tower-http",
- "ulid",
- "unicode-normalization",
- "url",
- "zstd",
-]
 
 [[package]]
 name = "normalize-line-endings"

@@ -42,7 +42,6 @@ impl Database {
             GeoFilter::Area { .. } => "area",
             GeoFilter::Around { .. } => "around",
             GeoFilter::Bbox { .. } => "bbox",
-            GeoFilter::Country => "country",
             GeoFilter::OverpassArea { .. } => "overpass_area",
         };
         self.conn

@@ -148,9 +148,12 @@ pub async fn fetch_records(
                     "geometry": {"type": "Point", "coordinates": [lon, lat]},
                     "properties": properties,
                 });
-                let Some(record) = feature_to_record(&feature_json, lon, lat) else {
+                let Some(mut record) = feature_to_record(&feature_json, lon, lat) else {
                     continue;
                 };
+                if record.address.country_code.is_none() {
+                    record.address.country_code = options.location.country_code.clone();
+                }
                 let key = record
                     .external_id
                     .clone()

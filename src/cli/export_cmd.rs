@@ -1,4 +1,4 @@
-//! `nicascan export`: salida para análisis o para una IA.
+//! `businesscan export`: salida para análisis o para una IA.
 
 use anyhow::{bail, Result};
 use clap::Args;

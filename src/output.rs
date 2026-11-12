@@ -92,10 +92,10 @@ impl Theme {
 
 pub fn banner(theme: &Theme) {
     println!();
-    println!("  {} {}", theme.cyan("◈"), theme.heading("NICASCAN"),);
+    println!("  {} {}", theme.cyan("◈"), theme.heading("BUSINESSCAN"),);
     println!(
         "  {}",
-        theme.muted("Negocios de Nicaragua, de todas las fuentes, en una sola base.")
+        theme.muted("Negocios del mundo, de todas las fuentes, en una sola base.")
     );
     println!();
 }

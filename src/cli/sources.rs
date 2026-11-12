@@ -1,4 +1,4 @@
-//! `nicascan sources`: estado de las fuentes integradas.
+//! `businesscan sources`: estado de las fuentes integradas.
 
 use anyhow::Result;
 use serde::Serialize;
@@ -49,7 +49,8 @@ pub fn run(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i32> {
     let mut sources = sources;
     sources.push(SourceInfo {
         name: "web".to_string(),
-        description: "Enriquecimiento desde el sitio web del negocio (nicascan enrich)".to_string(),
+        description: "Enriquecimiento desde el sitio web del negocio (businesscan enrich)"
+            .to_string(),
         requires_key: false,
         key_env: None,
         available: true,

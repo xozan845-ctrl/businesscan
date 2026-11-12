@@ -1,5 +1,5 @@
 VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-BINARY  := nicascan
+BINARY  := businesscan
 HOST    := $(shell rustc -vV | sed -n 's/^host: //p')
 DIST    := dist
 

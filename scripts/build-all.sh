@@ -25,7 +25,7 @@ for target in "${targets[@]}"; do
             *windows*) ext=".exe" ;;
             *) ext="" ;;
         esac
-        cp "target/$target/release/nicascan$ext" "dist/nicascan-$suffix$ext"
+        cp "target/$target/release/businesscan$ext" "dist/businesscan-$suffix$ext"
     else
         echo "!! Falló $target (¿falta el linker/CC para ese target?)" >&2
     fi

@@ -16,9 +16,9 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
-            asset: nicascan-linux-x86_64
+            asset: businesscan-linux-x86_64
           - target: aarch64-unknown-linux-musl
-            asset: nicascan-linux-aarch64
+            asset: businesscan-linux-aarch64
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +39,7 @@ jobs:
       - name: Empaquetar
         run: |
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/nicascan" "dist/${{ matrix.asset }}"
+          cp "target/${{ matrix.target }}/release/businesscan" "dist/${{ matrix.asset }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -58,11 +58,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp target/release/nicascan.exe dist/nicascan-windows-x86_64.exe
+          cp target/release/businesscan.exe dist/businesscan-windows-x86_64.exe
       - uses: actions/upload-artifact@v4
         with:
-          name: nicascan-windows-x86_64.exe
-          path: dist/nicascan-windows-x86_64.exe
+          name: businesscan-windows-x86_64.exe
+          path: dist/businesscan-windows-x86_64.exe
           if-no-files-found: error
 
   macos:
@@ -72,9 +72,9 @@ jobs:
       matrix:
         include:
           - target: aarch64-apple-darwin
-            asset: nicascan-macos-arm64
+            asset: businesscan-macos-arm64
           - target: x86_64-apple-darwin
-            asset: nicascan-macos-x86_64
+            asset: businesscan-macos-x86_64
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -86,7 +86,7 @@ jobs:
       - name: Empaquetar
         run: |
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/nicascan" "dist/${{ matrix.asset }}"
+          cp "target/${{ matrix.target }}/release/businesscan" "dist/${{ matrix.asset }}"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
@@ -109,11 +109,11 @@ jobs:
       - name: Empaquetar
         run: |
           mkdir -p dist
-          cp target/aarch64-linux-android/release/nicascan dist/nicascan-android-arm64
+          cp target/aarch64-linux-android/release/businesscan dist/businesscan-android-arm64
       - uses: actions/upload-artifact@v4
         with:
-          name: nicascan-android-arm64
-          path: dist/nicascan-android-arm64
+          name: businesscan-android-arm64
+          path: dist/businesscan-android-arm64
           if-no-files-found: error
 
   release:
@@ -135,4 +135,4 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
-          name: NicaScan ${{ github.ref_name }}
+          name: BusinessCan ${{ github.ref_name }}

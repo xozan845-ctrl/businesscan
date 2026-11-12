@@ -499,13 +499,11 @@ fn map_to_record(
         postal_code: get_first(map, &["codigo_postal", "postal_code", "zip", "zipcode"]),
         country_code: get_first(map, &["pais", "country", "country_code"])
             .map(|value| {
-                if value.len() == 2 {
-                    value.to_uppercase()
-                } else {
-                    "NI".to_string()
-                }
+                crate::gazetteer::Gazetteer::global()
+                    .normalize_country_code(&value)
+                    .unwrap_or(value)
             })
-            .or_else(|| Some("NI".to_string())),
+            .or_else(|| options.location.country_code.clone()),
     };
 
     let latitude = get_first(map, &["latitud", "latitude", "lat"])
@@ -608,6 +606,9 @@ fn map_to_record(
 }
 
 fn fill_location(mut address: Address, location: &ResolvedLocation) -> Address {
+    if address.country_code.is_none() {
+        address.country_code = location.country_code.clone();
+    }
     if address.departamento.is_none() {
         address.departamento = location.departamento.clone();
     }
@@ -726,6 +727,9 @@ mod tests {
         ResolvedLocation {
             query: "León".into(),
             display_name: "León, Nicaragua".into(),
+            country_code: Some("NI".into()),
+            country_name: Some("Nicaragua".into()),
+            continent: Some("North America".into()),
             departamento: Some("León".into()),
             municipio: Some("León".into()),
             barrio: None,

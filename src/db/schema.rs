@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS businesses (
 CREATE INDEX IF NOT EXISTS idx_businesses_name ON businesses(name_norm);
 CREATE INDEX IF NOT EXISTS idx_businesses_match_name ON businesses(match_name);
 CREATE INDEX IF NOT EXISTS idx_businesses_geo ON businesses(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_businesses_country ON businesses(country_code);
 CREATE INDEX IF NOT EXISTS idx_businesses_dept ON businesses(departamento_norm);
 CREATE INDEX IF NOT EXISTS idx_businesses_muni ON businesses(municipio_norm);
 CREATE INDEX IF NOT EXISTS idx_businesses_barrio ON businesses(barrio_norm);
@@ -181,7 +182,7 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
     let current: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
     if current > SCHEMA_VERSION {
         anyhow::bail!(
-            "La base fue creada con un esquema más nuevo (v{current}); actualiza nicascan"
+            "La base fue creada con un esquema más nuevo (v{current}); actualiza businesscan"
         );
     }
 
@@ -191,7 +192,7 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
             .context("No se pudo crear el esquema de la base")?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         tx.execute(
-            "INSERT INTO meta(key, value) VALUES ('app', 'nicascan')
+            "INSERT INTO meta(key, value) VALUES ('app', 'businesscan')
              ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             [],
         )?;
@@ -212,6 +213,9 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
 
     // FTS5 puede no estar disponible en SQLite compilado a medida. Si falla,
     // la búsqueda usa LIKE como respaldo.
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_businesses_country ON businesses(country_code);",
+    )?;
     let fts_ok = conn.execute_batch(FTS_SCHEMA).is_ok();
     conn.execute(
         "INSERT INTO meta(key, value) VALUES ('fts5', ?1)

@@ -1,4 +1,4 @@
-//! `nicascan places`: caché de geocodificación.
+//! `businesscan places`: caché de geocodificación.
 
 use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
@@ -23,10 +23,13 @@ pub enum PlacesCommand {
         /// Nombre del lugar, barrio, municipio o departamento
         #[arg(required = true, num_args = 1..)]
         query: Vec<String>,
+        /// País para desambiguar (ISO o nombre)
+        #[arg(short = 'C', long)]
+        country: Option<String>,
         /// Departamento para desambiguar
         #[arg(short = 'd', long)]
         departamento: Option<String>,
-        /// Municipio para desambiguar
+        /// Ciudad/municipio para desambiguar
         #[arg(short = 'm', long)]
         municipio: Option<String>,
         /// Ignora la caché existente
@@ -49,6 +52,8 @@ pub enum PlacesCommand {
 struct ResolveOutput {
     display_name: String,
     query: String,
+    country_code: Option<String>,
+    country_name: Option<String>,
     departamento: Option<String>,
     municipio: Option<String>,
     barrio: Option<String>,
@@ -69,14 +74,16 @@ pub async fn run(
     match args.command {
         PlacesCommand::Resolve {
             query,
+            country,
             departamento,
             municipio,
             refresh,
         } => {
             let input = LocationInput {
                 place: Some(query.join(" ")),
-                departamento,
-                municipio,
+                country,
+                department: departamento,
+                city: municipio,
                 ..Default::default()
             };
             input.validate()?;
@@ -100,6 +107,8 @@ pub async fn run(
                 let output = ResolveOutput {
                     display_name: location.display_name.clone(),
                     query: location.query.clone(),
+                    country_code: location.country_code.clone(),
+                    country_name: location.country_name.clone(),
                     departamento: location.departamento.clone(),
                     municipio: location.municipio.clone(),
                     barrio: location.barrio.clone(),
@@ -163,7 +172,7 @@ pub async fn run(
         }
         PlacesCommand::Clear { yes } => {
             if !yes {
-                bail!("Usa `nicascan places clear --yes` para confirmar.");
+                bail!("Usa `businesscan places clear --yes` para confirmar.");
             }
             let count = db.clear_places()?;
             if !global.quiet {

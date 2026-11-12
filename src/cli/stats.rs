@@ -1,4 +1,4 @@
-//! `nicascan stats`: cobertura y distribución de la base.
+//! `businesscan stats`: cobertura y distribución de la base.
 
 use anyhow::Result;
 use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
@@ -21,7 +21,7 @@ pub fn run(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i32> {
     if stats.total_businesses == 0 {
         println!();
         println!(
-            "  {} La base está vacía. Empieza con `nicascan scan --place \"León\"`.",
+            "  {} La base está vacía. Empieza con `businesscan scan --place \"León\"`.",
             theme.warning("·")
         );
         println!();
@@ -55,6 +55,7 @@ pub fn run(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i32> {
     );
     println!();
 
+    print_counts(theme, "Por país", &stats.by_country);
     print_counts(theme, "Por departamento", &stats.by_departamento);
     print_counts(theme, "Por categoría", &stats.by_category);
     print_counts(theme, "Por fuente", &stats.by_source);

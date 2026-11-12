@@ -34,6 +34,7 @@ pub struct ProviderRequest {
     pub category: Option<String>,
     pub limit: Option<usize>,
     pub include_unnamed: bool,
+    pub language: crate::i18n::Language,
     pub page_size: usize,
     pub max_pages: usize,
 }
@@ -132,7 +133,9 @@ pub fn resolve_sources(requested: &[String], config: &Config) -> Result<Vec<Box<
     let mut providers = Vec::new();
     for name in names {
         let Some(provider) = provider_by_name(&name) else {
-            bail!("Fuente desconocida: «{name}». Usa `nicascan sources` para ver las disponibles");
+            bail!(
+                "Fuente desconocida: «{name}». Usa `businesscan sources` para ver las disponibles"
+            );
         };
         if !provider.is_available(config) {
             if provider.requires_key() {

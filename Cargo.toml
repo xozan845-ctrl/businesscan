@@ -1,21 +1,21 @@
 [package]
-name = "nicascan"
+name = "businesscan"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.80"
-description = "Directorio extensible de negocios de Nicaragua desde múltiples fuentes, con SQLite portable"
+description = "Directorio internacional de negocios desde múltiples fuentes, con SQLite portable"
 license = "MIT"
-repository = "https://github.com/xozan845-ctrl/nicascan"
-homepage = "https://github.com/xozan845-ctrl/nicascan"
-keywords = ["nicaragua", "business", "directory", "cli", "scraper"]
+repository = "https://github.com/xozan845-ctrl/businesscan"
+homepage = "https://github.com/xozan845-ctrl/businesscan"
+keywords = ["business", "directory", "cli", "international", "poi"]
 categories = ["command-line-utilities", "database"]
 
 [[bin]]
-name = "nicascan"
+name = "businesscan"
 path = "src/main.rs"
 
 [lib]
-name = "nicascan"
+name = "businesscan"
 path = "src/lib.rs"
 
 [dependencies]

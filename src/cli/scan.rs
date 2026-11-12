@@ -1,4 +1,4 @@
-//! `nicascan scan`: consulta una o varias fuentes y guarda los negocios.
+//! `businesscan scan`: consulta una o varias fuentes y guarda los negocios.
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -73,6 +73,7 @@ pub async fn run(
     let input = args.location.to_input();
     input.validate()?;
     let mut scan_config = config.clone();
+    scan_config.language = global.lang;
     if let Some(path) = args.overture_file.clone() {
         scan_config.overture_file = Some(path);
     }
@@ -80,45 +81,58 @@ pub async fn run(
     let http = HttpClient::new(&scan_config)?;
     let resolver = LocationResolver::new(&scan_config, http.clone());
 
-    let cache_key = input.cache_key();
-    let cached = if args.location.refresh_place {
-        None
+    let locations = if input.continent.is_some() {
+        resolver
+            .resolve_many(&input)
+            .await
+            .context("No se pudo resolver el continente o país")?
     } else {
-        db.cached_place(&cache_key)?
-    };
-    let location = match cached {
-        Some(location) => {
-            if human {
-                println!(
-                    "  {} {}",
-                    theme.muted("Ubicación:"),
-                    theme.muted("desde caché")
-                );
+        let cache_key = input.cache_key();
+        let cached = if args.location.refresh_place {
+            None
+        } else {
+            db.cached_place(&cache_key)?
+        };
+        match cached {
+            Some(location) => {
+                if human {
+                    println!(
+                        "  {} {}",
+                        theme.muted("Ubicación:"),
+                        theme.muted("desde caché")
+                    );
+                }
+                vec![location]
             }
-            location
-        }
-        None => {
-            let location = resolver
-                .resolve(&input)
-                .await
-                .context("No se pudo resolver la ubicación")?;
-            db.save_place(&cache_key, &location)?;
-            location
+            None => {
+                let location = resolver
+                    .resolve(&input)
+                    .await
+                    .context("No se pudo resolver la ubicación")?;
+                db.save_place(&cache_key, &location)?;
+                vec![location]
+            }
         }
     };
 
+    if locations.is_empty() {
+        anyhow::bail!("La ubicación no produjo ningún país o área");
+    }
+
     if human {
         println!();
-        println!(
-            "  {} {}",
-            theme.cyan("◎"),
-            theme.bold(&location.display_name)
-        );
-        println!(
-            "  {} {}",
-            theme.muted("Filtro:"),
-            theme.muted(location_filter_label(&location))
-        );
+        for location in &locations {
+            println!(
+                "  {} {}",
+                theme.cyan("◎"),
+                theme.bold(&location.display_name)
+            );
+            println!(
+                "  {} {}",
+                theme.muted("Filtro:"),
+                theme.muted(location_filter_label(location))
+            );
+        }
         println!();
     }
 
@@ -133,17 +147,6 @@ pub async fn run(
     };
     let providers = resolve_sources(&requested, &scan_config)?;
     let provider_names: Vec<String> = providers.iter().map(|p| p.name().to_string()).collect();
-
-    if matches!(location.filter, GeoFilter::Country)
-        && args.limit.is_none()
-        && !global.quiet
-        && provider_names.iter().any(|name| name == "osm")
-    {
-        eprintln!(
-            "  {} Consulta de todo el país sin --limit: puede tardar y consumir mucha memoria en Overpass",
-            theme.warning("!")
-        );
-    }
 
     if human
         && provider_names
@@ -161,124 +164,147 @@ pub async fn run(
         http,
         config: scan_config.clone(),
     };
-    let request = ProviderRequest {
-        location: location.clone(),
-        query: args.query.clone(),
-        category: args.category.clone(),
-        limit: args.limit,
-        include_unnamed: args.include_unnamed,
-        page_size: 20,
-        max_pages: args.max_pages,
+    let summary_location = if locations.len() == 1 {
+        locations[0].display_name.clone()
+    } else {
+        format!("{} países/áreas", locations.len())
     };
-
     let mut summary = ScanSummary {
         scan_id: db.begin_scan(
-            &location.display_name,
+            &summary_location,
             &provider_names,
             args.query.as_deref().or(args.category.as_deref()),
         )?,
-        location: location.display_name.clone(),
+        location: summary_location,
         ..Default::default()
     };
+    let mut source_summaries: Vec<ScanSourceSummary> = provider_names
+        .iter()
+        .map(|name| ScanSourceSummary {
+            source: name.clone(),
+            ..Default::default()
+        })
+        .collect();
     let scan_started = Instant::now();
     let mut samples: Vec<BusinessRecord> = Vec::new();
 
-    for provider in &providers {
-        let name = provider.name().to_string();
-        let started = Instant::now();
-        let spinner = spinner(human, &format!("{name}: consultando…"));
-        let fetched = provider.fetch(&ctx, &request).await;
-        if let Some(spinner) = spinner {
-            spinner.finish_and_clear();
+    for location in &locations {
+        if human && locations.len() > 1 {
+            println!(
+                "  {} {}",
+                theme.muted("→"),
+                theme.bold(&location.display_name)
+            );
         }
-
-        let mut source_summary = ScanSourceSummary {
-            source: name.clone(),
-            ..Default::default()
+        let request = ProviderRequest {
+            location: location.clone(),
+            query: args.query.clone(),
+            category: args.category.clone(),
+            limit: args.limit,
+            include_unnamed: args.include_unnamed,
+            language: scan_config.language,
+            page_size: 20,
+            max_pages: args.max_pages,
         };
 
-        match fetched {
-            Ok(records) => {
-                source_summary.fetched = records.len();
-                if args.dry_run {
-                    for record in records.iter().take(5) {
-                        if !samples
-                            .iter()
-                            .any(|r| r.name == record.name && r.source == record.source)
-                        {
-                            samples.push(record.clone());
-                        }
-                    }
-                    if human {
-                        println!(
-                            "  {} {} {}",
-                            theme.cyan("·"),
-                            theme.bold(&name),
-                            theme.muted(format!("{} resultados (dry-run)", records.len()))
-                        );
-                    }
-                } else {
-                    let pb =
-                        progress_bar(human, records.len() as u64, &format!("{name}: guardando"));
-                    let mut inserted = 0usize;
-                    let mut merged = 0usize;
-                    let mut skipped = 0usize;
-                    for chunk in records.chunks(200) {
-                        let results = import_batch(&mut db, chunk)?;
-                        for result in results {
-                            match result.action {
-                                UpsertAction::Inserted => inserted += 1,
-                                UpsertAction::Merged => merged += 1,
-                                UpsertAction::Skipped => skipped += 1,
+        for (provider_index, provider) in providers.iter().enumerate() {
+            let name = provider.name().to_string();
+            let started = Instant::now();
+            let spinner = spinner(human, &format!("{name}: consultando…"));
+            let fetched = provider.fetch(&ctx, &request).await;
+            if let Some(spinner) = spinner {
+                spinner.finish_and_clear();
+            }
+
+            let source_summary = &mut source_summaries[provider_index];
+            match fetched {
+                Ok(records) => {
+                    source_summary.fetched += records.len();
+                    if args.dry_run {
+                        for record in records.iter().take(5) {
+                            if !samples
+                                .iter()
+                                .any(|r| r.name == record.name && r.source == record.source)
+                            {
+                                samples.push(record.clone());
                             }
                         }
-                        if let Some(pb) = &pb {
-                            pb.inc(chunk.len() as u64);
+                        if human {
+                            println!(
+                                "  {} {} {}",
+                                theme.cyan("·"),
+                                theme.bold(&name),
+                                theme.muted(format!("{} resultados (dry-run)", records.len()))
+                            );
+                        }
+                    } else {
+                        let pb = progress_bar(
+                            human,
+                            records.len() as u64,
+                            &format!("{name}: guardando"),
+                        );
+                        let mut inserted = 0usize;
+                        let mut merged = 0usize;
+                        let mut skipped = 0usize;
+                        for chunk in records.chunks(200) {
+                            let results = import_batch(&mut db, chunk)?;
+                            for result in results {
+                                match result.action {
+                                    UpsertAction::Inserted => inserted += 1,
+                                    UpsertAction::Merged => merged += 1,
+                                    UpsertAction::Skipped => skipped += 1,
+                                }
+                            }
+                            if let Some(pb) = &pb {
+                                pb.inc(chunk.len() as u64);
+                            }
+                        }
+                        if let Some(pb) = pb {
+                            pb.finish_and_clear();
+                        }
+                        summary.total_inserted += inserted;
+                        summary.total_merged += merged;
+                        summary.total_skipped += skipped;
+                        source_summary.inserted += inserted;
+                        source_summary.merged += merged;
+                        source_summary.skipped += skipped;
+                        if human {
+                            println!(
+                                "  {} {} {}",
+                                theme.success("✓"),
+                                theme.bold(&name),
+                                theme.muted(format!(
+                                    "{} encontrados · {} nuevos · {} fusionados",
+                                    records.len(),
+                                    inserted,
+                                    merged
+                                ))
+                            );
                         }
                     }
-                    if let Some(pb) = pb {
-                        pb.finish_and_clear();
-                    }
-                    summary.total_inserted += inserted;
-                    summary.total_merged += merged;
-                    summary.total_skipped += skipped;
-                    source_summary.inserted = inserted;
-                    source_summary.merged = merged;
-                    source_summary.skipped = skipped;
-                    if human {
-                        println!(
-                            "  {} {} {}",
-                            theme.success("✓"),
+                    summary.total_fetched += records.len();
+                }
+                Err(error) => {
+                    let message = format!("{error:#}");
+                    log::warn!("{name} ({}): {message}", location.display_name);
+                    if !global.json {
+                        eprintln!(
+                            "  {} {} ({}): {}",
+                            theme.error("✕"),
                             theme.bold(&name),
-                            theme.muted(format!(
-                                "{} encontrados · {} nuevos · {} fusionados",
-                                records.len(),
-                                inserted,
-                                merged
-                            ))
+                            theme.muted(&location.display_name),
+                            theme.red(&message)
                         );
                     }
+                    source_summary
+                        .errors
+                        .push(format!("{}: {message}", location.display_name));
                 }
-                summary.total_fetched += records.len();
             }
-            Err(error) => {
-                let message = format!("{error:#}");
-                log::warn!("{name}: {message}");
-                if !global.json {
-                    eprintln!(
-                        "  {} {}: {}",
-                        theme.error("✕"),
-                        theme.bold(&name),
-                        theme.red(&message)
-                    );
-                }
-                source_summary.errors.push(message);
-            }
+            source_summary.duration_ms += started.elapsed().as_millis() as u64;
         }
-
-        source_summary.duration_ms = started.elapsed().as_millis() as u64;
-        summary.sources.push(source_summary);
     }
+    summary.sources = source_summaries;
 
     summary.duration_ms = scan_started.elapsed().as_millis() as u64;
     db.finish_scan(&summary)?;
@@ -310,7 +336,7 @@ pub async fn run(
         println!(
             "  {} {}",
             theme.muted("Siguiente:"),
-            theme.cyan("nicascan search --departamento <depto> --has-phone")
+            theme.cyan("businesscan search --departamento <depto> --has-phone")
         );
         println!();
     }
@@ -383,7 +409,6 @@ fn location_filter_label(location: &ResolvedLocation) -> String {
         GeoFilter::Area { relation_id } => {
             format!("área administrativa OSM (relación {relation_id})")
         }
-        GeoFilter::Country => "todo Nicaragua (área OSM)".to_string(),
         GeoFilter::OverpassArea { area_id } => format!("área Overpass {area_id}"),
         GeoFilter::Around { lat, lon, radius_m } => {
             format!("radio {radius_m:.0} m alrededor de {lat:.5}, {lon:.5}")

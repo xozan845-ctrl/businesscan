@@ -103,7 +103,7 @@ pub fn duplicates(
     println!();
     println!(
         "  {}",
-        theme.muted("Fusiona con: nicascan merge <id_que_conservas> <id_absorbido> --yes")
+        theme.muted("Fusiona con: businesscan merge <id_que_conservas> <id_absorbido> --yes")
     );
     println!();
     Ok(0)
@@ -112,7 +112,7 @@ pub fn duplicates(
 pub fn merge(args: MergeArgs, config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i32> {
     if !args.yes {
         bail!(
-            "Esto fusiona dos negocios de forma irreversible. Revisa con `nicascan show` y repite con --yes"
+            "Esto fusiona dos negocios de forma irreversible. Revisa con `businesscan show` y repite con --yes"
         );
     }
     let mut db = crate::cli::open_db(config)?;

@@ -1,4 +1,4 @@
-//! `nicascan serve`: API HTTP local para agentes de IA.
+//! `businesscan serve`: API HTTP local para agentes de IA.
 
 use std::net::{IpAddr, SocketAddr};
 
@@ -20,8 +20,8 @@ pub struct ServeArgs {
     #[arg(short = 'p', long, default_value_t = 8787)]
     pub port: u16,
 
-    /// Token Bearer opcional (o NICASCAN_API_TOKEN)
-    #[arg(long, env = "NICASCAN_API_TOKEN")]
+    /// Token Bearer opcional (o BUSINESSCAN_API_TOKEN)
+    #[arg(long, env = "BUSINESSCAN_API_TOKEN")]
     pub token: Option<String>,
 }
 

@@ -1,16 +1,16 @@
-# ◈ NicaScan
+# ◈ BusinessCan
 
-**Directorio extensible de negocios de Nicaragua, desde la terminal.**
+**Directorio internacional de negocios, desde la terminal.**
 
-NicaScan busca negocios en varias fuentes, normaliza y deduplica los datos, y
-los guarda en **un único archivo SQLite portable**. Sirve para explorar el
-directorio desde la terminal, exportarlo a JSONL/CSV o alimentar un agente de
-IA que ofrezca servicios a esos negocios.
+BusinessCan busca negocios en Centroamérica y el mundo, normaliza y deduplica
+los datos y los guarda en **un único archivo SQLite portable**. Sirve para
+explorar el directorio desde la terminal, exportarlo a JSONL/CSV o alimentar un
+agente de IA que ofrezca servicios a esos negocios.
 
 Funciona en **Termux (Android), Linux, macOS y Windows** con un binario Rust.
 
 ```
-  ◈ NICASCAN
+  ◈ BUSINESSCAN
 
   ◎ León, Departamento de León, Nicaragua
   Filtro: área administrativa OSM (relación 18466957)
@@ -21,21 +21,29 @@ Funciona en **Termux (Android), Linux, macOS y Windows** con un binario Rust.
 
 ## Por qué existe
 
-Los datos de negocios de Nicaragua están dispersos: OpenStreetMap tiene POIs,
-Google y Foursquare tienen fichas comerciales, las cámaras y el MIFIC publican
-CSV, y cada negocio tiene su propio Facebook o WhatsApp. NicaScan no intenta
-inventar datos: **integra fuentes, conserva la procedencia y deja una base
-consultable** para que otra herramienta (por ejemplo, un agente de IA) decida a
-quién ofrecerle qué servicio.
+Los datos de negocios están dispersos: OpenStreetMap tiene POIs, Google y
+Foursquare tienen fichas comerciales, las cámaras y los portales públicos
+publican CSV, y cada negocio tiene su propio Facebook o WhatsApp. BusinessCan no
+intenta inventar datos: **integra fuentes, conserva la procedencia y deja una
+base consultable** para que otra herramienta (por ejemplo, un agente de IA)
+decida a quién ofrecerle qué servicio.
+
+La base incluye 250 países/territorios, nombres en español e inglés, bbox y
+código telefónico. El primer foco es **Centroamérica** (Belice, Guatemala,
+Honduras, El Salvador, Nicaragua, Costa Rica y Panamá), pero la arquitectura no
+tiene nada específico de un país.
 
 ## Qué incluye
 
 - **Múltiples fuentes conectables**: OpenStreetMap/Overpass (sin clave), Google
   Places (opcional, de pago), Foursquare Places (opcional), Overture Maps
   (descarga automática por PMTiles o GeoJSON local) e importación CSV/JSON/JSONL.
-- **Búsqueda por ubicación**: país, departamento, municipio, barrio, comarca,
-  radio alrededor de coordenadas o bounding box. La geocodificación usa
-  Nominatim y se cachea.
+- **Búsqueda por ubicación**: continente, país, departamento/provincia,
+  ciudad/municipio, barrio/comarca, radio alrededor de coordenadas o bounding
+  box. La geocodificación usa Nominatim y se cachea.
+- **Internacionalizado**: `--lang es|en` para consultas, etiquetas y nombres de
+  países; teléfonos normalizados con el código del país; 250 países en el
+  gacetero y Centroamérica como grupo de primera clase.
 - **Datos extensos**: nombre, razón social, descripción, categoría/tipo,
   teléfonos, celulares, WhatsApp, correos, sitio web, Facebook, Instagram,
   TikTok, X/Twitter, Telegram, LinkedIn, YouTube, dirección completa, barrio,
@@ -64,11 +72,11 @@ quién ofrecerle qué servicio.
 ```bash
 pkg update
 pkg install rust clang pkg-config
-git clone https://github.com/xozan845-ctrl/nicascan.git
-cd nicascan
+git clone https://github.com/xozan845-ctrl/businesscan.git
+cd businesscan
 cargo build --release
-install -m755 target/release/nicascan "$PREFIX/bin/nicascan"
-nicascan --version
+install -m755 target/release/businesscan "$PREFIX/bin/businesscan"
+businesscan --version
 ```
 
 También puedes usar `scripts/build-termux.sh`. El binario pesa poco y no
@@ -86,12 +94,12 @@ O descarga un binario de la sección **Releases**. Los artefactos esperados son:
 
 | Plataforma | Archivo |
 |---|---|
-| Android / Termux ARM64 | `nicascan-android-arm64` |
-| Linux x86_64 (musl, estático) | `nicascan-linux-x86_64` |
-| Linux ARM64 (musl, estático) | `nicascan-linux-aarch64` |
-| Windows x86_64 | `nicascan-windows-x86_64.exe` |
-| macOS Apple Silicon | `nicascan-macos-arm64` |
-| macOS Intel | `nicascan-macos-x86_64` |
+| Android / Termux ARM64 | `businesscan-android-arm64` |
+| Linux x86_64 (musl, estático) | `businesscan-linux-x86_64` |
+| Linux ARM64 (musl, estático) | `businesscan-linux-aarch64` |
+| Windows x86_64 | `businesscan-windows-x86_64.exe` |
+| macOS Apple Silicon | `businesscan-macos-arm64` |
+| macOS Intel | `businesscan-macos-x86_64` |
 
 En Termux se recomienda compilar nativamente (`cargo build --release`); el
 binario Android de Releases es una alternativa para dispositivos compatibles.
@@ -104,36 +112,36 @@ SQLite se compila dentro del binario; no hace falta instalarlo por separado.
 ```bash
 cargo test
 cargo build --release
-./target/release/nicascan init
+./target/release/businesscan init
 ```
 
 ## Inicio rápido
 
 ```bash
 # 1. Crear la base (también se crea sola al usarla)
-nicascan init
+businesscan init
 
-# 2. Buscar negocios en León y guardarlos
-nicascan scan --departamento León --limit 200
+# 2. Buscar negocios en León (Nicaragua) y guardarlos
+businesscan scan --country NI --department León --limit 200
 
 # 3. Consultar lo guardado
-nicascan search "ferretería" --has-phone
-nicascan search --municipio Managua --category restaurante --limit 10
+businesscan search "ferretería" --country NI --has-phone
+businesscan search --country NI --city Managua --category restaurante --limit 10
 
 # 4. Ver una ficha completa (el ID corto es único en la lista)
-nicascan show 7ZQ2TVRR
+businesscan show 7ZQ2TVRR
 
 # 5. Exportar para una IA
-nicascan export --format jsonl -o negocios.jsonl
+businesscan export --format jsonl -o negocios.jsonl
 ```
 
 La base por defecto está en:
 
-- **Linux/Termux**: `~/.local/share/nicascan/nicascan.db`
-- **macOS**: `~/Library/Application Support/ni.nicascan.nicascan/nicascan.db`
-- **Windows**: `%APPDATA%\nicascan\nicascan\data\nicascan.db`
+- **Linux/Termux**: `~/.local/share/businesscan/businesscan.db`
+- **macOS**: `~/Library/Application Support/com.businesscan.businesscan/businesscan.db`
+- **Windows**: `%APPDATA%\businesscan\businesscan\data\businesscan.db`
 
-Cambia la ruta con `--db /ruta/negocios.db` o `NICASCAN_DB`.
+Cambia la ruta con `--db /ruta/negocios.db` o `BUSINESSCAN_DB`.
 
 ## Comandos
 
@@ -158,37 +166,53 @@ Cambia la ruta con `--db /ruta/negocios.db` o `NICASCAN_DB`.
 ### `scan`
 
 ```bash
-# Departamento completo
-nicascan scan --departamento Chinandega
+# País completo
+businesscan scan --country NI --limit 1000
 
-# Municipio (con o sin departamento)
-nicascan scan --departamento Managua --municipio Managua
+# Departamento y ciudad
+businesscan scan --country GT --department Sacatepéquez --city "Antigua Guatemala"
+businesscan scan --country CR --department "San José" --city "San José"
 
 # Barrio o comarca
-nicascan scan --barrio "Martha Quezada" --municipio Managua --departamento Managua
-nicascan scan --comarca "Las Jagüitas" --municipio Managua
+businesscan scan --country NI --barrio "Martha Quezada" --city Managua
+businesscan scan --country NI --comarca "Las Jagüitas" --city Managua
+
+# Toda Centroamérica
+businesscan scan --continent central-america --limit 200
 
 # Texto libre (Nominatim decide el polígono/radio)
-nicascan scan --place "Barrio Bolonia, Managua"
+businesscan scan --place "Antigua Guatemala"
 
 # Coordenadas y radio
-nicascan scan --lat 12.1364 --lon -86.2514 --radius 800
-
-# Todo Nicaragua (consulta grande; usa --limit)
-nicascan scan --all --limit 1000
+businesscan scan --country NI --lat 12.1364 --lon -86.2514 --radius 800
 
 # Categoría y varias fuentes
-nicascan scan --departamento León --category ferreteria,restaurante \
+businesscan scan --country NI --department León --category ferreteria,restaurante \
   --source osm,google --limit 100
 
-# Overture Maps automático por tiles (barrio, ciudad o área)
-nicascan overture fetch --departamento Managua --municipio Managua --limit 500
-nicascan overture fetch --barrio "Martha Quezada" --municipio Managua --limit 200
-nicascan overture fetch --lat 12.1364 --lon -86.2514 --radius 800 --limit 100
+# Overture Maps automático por tiles (ciudad o área)
+businesscan overture fetch --country GT --city "Antigua Guatemala" --limit 500
+businesscan overture fetch --country NI --city Managua --barrio "Martha Quezada" --limit 200
+businesscan overture fetch --lat 12.1364 --lon -86.2514 --radius 800 --limit 100
 
 # Overture desde un GeoJSON ya extraído (país completo o sin red)
-nicascan scan --all --source overture --overture-file overture-nicaragua.geojson
+businesscan scan --country NI --source overture --overture-file overture-nicaragua.geojson
 ```
+
+### Internacionalización y alcance
+
+```bash
+businesscan scan --country PA --limit 100
+businesscan scan --continent central-america --limit 100
+businesscan scan --continent europe --country Spain --limit 100
+businesscan search --country GT --lang en
+```
+
+`--continent` acepta `central-america`, `north-america`, `south-america`,
+`americas`, `europe`, `asia`, `africa`, `oceania` y `world`. `--country` acepta
+ISO2/ISO3 o nombre en español/inglés. Departamentos y ciudades se resuelven con
+Nominatim, así que funcionan en cualquier país. `--lang en` cambia etiquetas y
+consultas a proveedores; los datos de origen conservan su idioma original.
 
 Opciones importantes:
 
@@ -203,10 +227,10 @@ Opciones importantes:
 ### `search`
 
 ```bash
-nicascan search "farmacia" --departamento Managua --has-phone
-nicascan search --category taller --lat 12.13 --lon -86.25 --radius 2000
-nicascan search --barrio Bolonia --sort name --limit 50
-nicascan search --source google --min-confidence 0.8 --json
+businesscan search "farmacia" --country NI --city Managua --has-phone
+businesscan search --country CR --category taller --lat 9.93 --lon -84.08 --radius 2000
+businesscan search --country NI --barrio Bolonia --sort name --limit 50
+businesscan search --source google --min-confidence 0.8 --json
 ```
 
 El texto libre usa FTS5 y tolera acentos y prefijos: `leon` encuentra `León`,
@@ -216,21 +240,21 @@ El texto libre usa FTS5 y tolera acentos y prefijos: `leon` encuentra `León`,
 
 ```bash
 # JSONL: una línea por negocio, con contactos, etiquetas y procedencia
-nicascan export --format jsonl -o negocios.jsonl
+businesscan export --format jsonl -o negocios.jsonl
 
 # Solo los que tienen teléfono o web, en un departamento
-nicascan export --departamento León --has-phone --format jsonl -o leon.jsonl
+businesscan export --country NI --department León --has-phone --format jsonl -o leon.jsonl
 
 # CSV plano (contactos separados por " | ")
-nicascan export --format csv -o negocios.csv
+businesscan export --format csv -o negocios.csv
 
 # Copia SQLite completa (consistente incluso con WAL)
-nicascan db backup ./respaldo.db
+businesscan db backup ./respaldo.db
 # o
-nicascan export --format sqlite -o respaldo.db
+businesscan export --format sqlite -o respaldo.db
 
 # Incluye el JSON original de cada fuente
-nicascan export --format jsonl --include-raw -o con_fuentes.jsonl
+businesscan export --format jsonl --include-raw -o con_fuentes.jsonl
 ```
 
 Formato JSONL recomendado para IA: conserva objetos anidados (`contacts`,
@@ -240,9 +264,9 @@ streaming.
 ### `import`
 
 ```bash
-nicascan import negocios.csv --source mific
-nicascan import directorio.json --source camara --departamento León
-nicascan import datos.csv --delimiter ';' --dry-run
+businesscan import negocios.csv --source mific
+businesscan import directorio.json --source camara --country NI --department León
+businesscan import datos.csv --delimiter ';' --dry-run
 ```
 
 Reconoce encabezados como `nombre`, `name`, `teléfono`, `celular`, `correo`,
@@ -260,7 +284,7 @@ procedencia. También importa JSON anidado con `contacts` y `address`.
 | `foursquare` | `FOURSQUARE_API_KEY` | Plan gratuito limitado | Categorías, contacto, redes sociales, horarios, popularidad. |
 | `overture` | No | Gratis | Places de Overture por PMTiles (descarga solo los tiles del área) o GeoJSON local. |
 | `web` | No | Gratis | Enriquecimiento desde el sitio oficial del negocio. |
-| `import` | No | Gratis | Datasets de MIFIC, cámaras, INE, planillas propias. |
+| `import` | No | Gratis | Datasets públicos, cámaras, portales de datos y planillas propias. |
 
 Por defecto se usan todas las fuentes **configuradas** (OSM y Google/Foursquare
 si tienen clave). Overture se descarga automáticamente con `scan --source overture`
@@ -270,9 +294,9 @@ o `overture fetch`, o se lee local con `--overture-file`. Puedes forzar
 ### Overture automático
 
 ```bash
-nicascan overture latest
-nicascan overture fetch --departamento León --limit 300
-nicascan overture fetch --lat 12.1364 --lon -86.2514 --radius 1000 --limit 100
+businesscan overture latest
+businesscan overture fetch --country NI --department León --limit 300
+businesscan overture fetch --lat 12.1364 --lon -86.2514 --radius 1000 --limit 100
 ```
 
 El comando descubre la release más reciente, lee el PMTiles por HTTP Range y
@@ -305,7 +329,7 @@ Un negocio canónico tiene:
 Se fusiona cuando coincide, en orden:
 
 1. La misma fuente + `external_id`.
-2. Un teléfono normalizado (últimos 8 dígitos en Nicaragua).
+2. Un teléfono normalizado (E.164; en Nicaragua se compara por los últimos 8 dígitos por compatibilidad).
 3. El mismo dominio web y un nombre parecido.
 4. El mismo nombre normalizado + cercanía (≤ 300 m) o misma dirección/barrio.
 
@@ -317,17 +341,17 @@ no se fusionan si no comparten teléfono/web/cercanía.
 Para revisar lo que quedó pendiente:
 
 ```bash
-nicascan duplicates --min-score 0.75
-nicascan show <id>
-nicascan merge <id_que_conservas> <id_absorbido> --yes
+businesscan duplicates --min-score 0.75
+businesscan show <id>
+businesscan merge <id_que_conservas> <id_absorbido> --yes
 ```
 
 ### Enriquecimiento web
 
 ```bash
-nicascan enrich --source osm --limit 25
-nicascan enrich --departamento León --missing-only --dry-run
-nicascan enrich --refresh --limit 10
+businesscan enrich --source osm --limit 25
+businesscan enrich --country NI --department León --missing-only --dry-run
+businesscan enrich --refresh --limit 10
 ```
 
 Lee la portada y hasta `--max-pages` páginas de contacto/nosotros. Extrae
@@ -339,17 +363,17 @@ privadas (SSRF).
 
 | Variable | Uso |
 |---|---|
-| `NICASCAN_DB` | Ruta de la base SQLite. |
-| `NICASCAN_USER_AGENT` | User-Agent con contacto para Nominatim/Overpass. |
-| `NICASCAN_OVERPASS_URL` | Espejos de Overpass separados por coma. |
-| `NICASCAN_NOMINATIM_URL` | Instancia de Nominatim. |
+| `BUSINESSCAN_DB` | Ruta de la base SQLite. |
+| `BUSINESSCAN_USER_AGENT` | User-Agent con contacto para Nominatim/Overpass. |
+| `BUSINESSCAN_OVERPASS_URL` | Espejos de Overpass separados por coma. |
+| `BUSINESSCAN_NOMINATIM_URL` | Instancia de Nominatim. |
 | `GOOGLE_PLACES_API_KEY` | Activa Google Places. |
 | `FOURSQUARE_API_KEY` | Activa Foursquare. |
-| `NICASCAN_LANGUAGE` | Idioma de consultas (por defecto `es`). |
-| `NICASCAN_OFFLINE` | `1` evita llamadas de red. |
-| `NICASCAN_OVERTURE_FILE` | GeoJSON/JSONL de Overture. |
-| `NICASCAN_ENRICH_DELAY_MS` | Pausa por host al enriquecer (por defecto 2000). |
-| `NICASCAN_API_TOKEN` | Token Bearer para `nicascan serve`. |
+| `BUSINESSCAN_LANG` | Idioma de consultas y etiquetas (`es` o `en`). |
+| `BUSINESSCAN_OFFLINE` | `1` evita llamadas de red. |
+| `BUSINESSCAN_OVERTURE_FILE` | GeoJSON/JSONL de Overture. |
+| `BUSINESSCAN_ENRICH_DELAY_MS` | Pausa por host al enriquecer (por defecto 2000). |
+| `BUSINESSCAN_API_TOKEN` | Token Bearer para `businesscan serve`. |
 | `RUST_LOG` / `-v` / `-vv` | Nivel de logs en stderr. |
 
 Copia [`.env.example`](.env.example) como referencia; la CLI **no** carga `.env`
@@ -361,8 +385,8 @@ SQLite es un formato estable y legible desde Python, Go, Node, Rust, Java,
 DuckDB, etc. La base usa WAL para escrituras seguras. Para copiarla:
 
 ```bash
-nicascan db checkpoint        # consolida el WAL
-nicascan db backup salida.db  # copia consistente (VACUUM INTO)
+businesscan db checkpoint        # consolida el WAL
+businesscan db backup salida.db  # copia consistente (VACUUM INTO)
 ```
 
 También puedes copiar el `.db` con la aplicación cerrada. `db backup` es la
@@ -371,9 +395,9 @@ forma recomendada si hay escrituras concurrentes.
 ## API local para IA
 
 ```bash
-nicascan serve --port 8787
+businesscan serve --port 8787
 # o con token si vas a escuchar fuera de loopback
-NICASCAN_API_TOKEN=secreto nicascan serve --host 0.0.0.0
+BUSINESSCAN_API_TOKEN=secreto businesscan serve --host 0.0.0.0
 ```
 
 Endpoints:
@@ -398,10 +422,10 @@ Ejemplo:
 curl "http://127.0.0.1:8787/v1/businesses?q=farmacia&has_phone=true&limit=5"
 curl -X POST http://127.0.0.1:8787/v1/search \
   -H 'Content-Type: application/json' \
-  -d '{"departamento":"León","min_quality":0.6,"limit":20}'
+  -d '{"country":"NI","departamento":"León","min_quality":0.6,"limit":20}'
 ```
 
-Si defines `NICASCAN_API_TOKEN`, envía `Authorization: Bearer <token>`.
+Si defines `BUSINESSCAN_API_TOKEN`, envía `Authorization: Bearer <token>`.
 El panel está en <http://127.0.0.1:8787/panel>; guarda el token en el navegador
 si lo configuraste.
 
@@ -409,7 +433,7 @@ si lo configuraste.
 
 1. Exporta JSONL:
    ```bash
-   nicascan export --format jsonl --include-raw -o negocios.jsonl
+   businesscan export --format jsonl --include-raw -o negocios.jsonl
    ```
 2. Cada línea contiene un negocio con contactos, dirección, etiquetas y
    procedencia. Tu agente puede filtrar por departamento, categoría, teléfono,
@@ -430,17 +454,18 @@ si lo configuraste.
 - **OpenStreetMap** es © colaboradores de OpenStreetMap, licencia ODbL. Si
   publicas datos derivados, atribuye y comparte bajo ODbL según corresponda.
 - **Nominatim** y **Overpass** tienen políticas de uso: envía un User-Agent
-  identificable, no abuses del servicio y respeta sus límites. NicaScan cachea
+  identificable, no abuses del servicio y respeta sus límites. BusinessCan cachea
   geocodificaciones y limita a ~1 req/s.
 - **Google Places** y **Foursquare** tienen términos, cuotas y restricciones de
   almacenamiento/visualización. Revisa sus licencias antes de redistribuir.
-- **Datos personales**: la Ley 787 de Nicaragua protege datos personales.
-  NicaScan está pensado para información comercial pública (nombre del negocio,
-  teléfono comercial, dirección). No lo uses para perfilar personas.
+- **Datos personales**: cumple la ley de protección de datos del país que
+  consultes (en Nicaragua, la Ley 787). BusinessCan está pensado para
+  información comercial pública (nombre del negocio, teléfono comercial,
+  dirección). No lo uses para perfilar personas.
 - **Scraping**: el proyecto no scrapea sitios que lo prohíben. Para agregar una
   web nueva, respeta `robots.txt`, los términos de servicio y la ley aplicable.
 - La cobertura de OSM es desigual: hay negocios informales que no aparecen en
-  ninguna fuente. NicaScan no inventa datos; indica la procedencia y confianza.
+  ninguna fuente. BusinessCan no inventa datos; indica la procedencia y confianza.
 
 ## Arquitectura y desarrollo
 
@@ -473,18 +498,18 @@ make dist
 - [x] Termux/Linux/macOS/Windows.
 - [x] Enriquecimiento respetuoso desde sitios web (JSON-LD, `mailto:`, `tel:`).
 - [x] Overture Maps: descarga automática por PMTiles y lectura de GeoJSON local.
-- [x] API local para agentes (`nicascan serve`).
+- [x] API local para agentes (`businesscan serve`).
 - [x] Calidad de ficha, revisión de duplicados y fusión manual.
 - [x] Panel web de búsqueda, calidad y revisión de duplicados.
 
 ### Limitación conocida de Overture
 
 El PMTiles público de Overture Places solo está poblado en zoom 14. Para un
-barrio, ciudad o área mediana funciona muy bien; para **todo Nicaragua** el
+barrio, ciudad, departamento o área mediana funciona muy bien; para **un país completo** el
 número de tiles crece a decenas de miles y el volumen ronda varios GB. En ese
 caso usa `scan --overture-file` con un extracto preparado con DuckDB (ver
 `docs/SOURCES.md`), o sube `--max-tiles` asumiendo la descarga. No es una
-limitación de NicaScan sino del dataset público.
+limitación de BusinessCan sino del dataset público.
 
 ## Licencia
 

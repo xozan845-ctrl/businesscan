@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::i18n::Language;
 use crate::normalize::normalize_text;
 
 pub const AMENITY_REGEX: &str = "restaurant|cafe|fast_food|bar|pub|food_court|ice_cream|bank|atm|bureau_de_change|pharmacy|clinic|hospital|dentist|doctors|veterinary|fuel|car_wash|car_rental|car_sharing|taxi|driving_school|marketplace|money_transfer|nightclub|casino|cinema|theatre|arts_centre|conference_centre|coworking_space|childcare|kindergarten|school|college|university|library|post_office|social_facility|studio";
@@ -31,8 +32,11 @@ pub fn pick_category(tags: &BTreeMap<String, String>) -> Option<(String, String)
     None
 }
 
-pub fn category_label(key: &str, value: &str) -> String {
+pub fn category_label(key: &str, value: &str, language: Language) -> String {
     let value = value.split(';').next().unwrap_or(value).trim();
+    if language == Language::En {
+        return english_label(key, value);
+    }
     let label = match (key, value) {
         (_, "supermarket") => "Supermercado",
         (_, "convenience") => "Tienda de conveniencia",
@@ -142,6 +146,81 @@ pub fn category_label(key: &str, value: &str) -> String {
         (_, "engineer") => "Ingeniero",
         (_, "company") => "Empresa",
         (_, "industrial") => "Industria",
+        _ => "",
+    };
+    if !label.is_empty() {
+        return label.to_string();
+    }
+    let pretty = value.replace('_', " ");
+    let mut chars = pretty.chars();
+    match chars.next() {
+        Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+        None => key.to_string(),
+    }
+}
+
+fn english_label(key: &str, value: &str) -> String {
+    let label = match (key, value) {
+        (_, "supermarket") => "Supermarket",
+        (_, "convenience") => "Convenience store",
+        (_, "greengrocer") => "Greengrocer",
+        (_, "butcher") => "Butcher",
+        (_, "bakery") => "Bakery",
+        (_, "hardware") => "Hardware store",
+        (_, "doityourself") => "DIY store",
+        (_, "clothes") => "Clothing store",
+        (_, "shoes") => "Shoe store",
+        (_, "jewelry") => "Jewelry store",
+        (_, "optician") => "Optician",
+        (_, "furniture") => "Furniture store",
+        (_, "electronics") => "Electronics store",
+        (_, "mobile_phone") => "Mobile phone store",
+        (_, "computer") => "Computer store",
+        (_, "car_parts") => "Car parts",
+        (_, "car_repair") => "Car repair",
+        (_, "beauty") => "Beauty salon",
+        (_, "hairdresser") => "Hairdresser",
+        (_, "laundry") => "Laundry",
+        (_, "books") => "Bookstore",
+        (_, "stationery") => "Stationery store",
+        (_, "florist") => "Florist",
+        (_, "gift") => "Gift shop",
+        (_, "restaurant") => "Restaurant",
+        (_, "cafe") => "Café",
+        (_, "fast_food") => "Fast food",
+        (_, "bar") => "Bar",
+        (_, "pub") => "Pub",
+        (_, "bank") => "Bank",
+        (_, "atm") => "ATM",
+        (_, "pharmacy") => "Pharmacy",
+        (_, "clinic") => "Clinic",
+        (_, "hospital") => "Hospital",
+        (_, "dentist") => "Dentist",
+        (_, "doctors") => "Doctor's office",
+        (_, "veterinary") => "Veterinarian",
+        (_, "fuel") => "Gas station",
+        (_, "marketplace") => "Market",
+        (_, "nightclub") => "Nightclub",
+        (_, "cinema") => "Cinema",
+        (_, "theatre") => "Theater",
+        (_, "school") => "School",
+        (_, "university") => "University",
+        (_, "library") => "Library",
+        (_, "post_office") => "Post office",
+        (_, "hotel") => "Hotel",
+        (_, "hostel") => "Hostel",
+        (_, "guest_house") => "Guest house",
+        (_, "museum") => "Museum",
+        (_, "fitness_centre") => "Gym",
+        (_, "sports_centre") => "Sports center",
+        (_, "swimming_pool") => "Swimming pool",
+        (_, "lawyer") => "Lawyer",
+        (_, "accountant") => "Accountant",
+        (_, "estate_agent") => "Real estate agency",
+        (_, "travel_agency") => "Travel agency",
+        (_, "insurance") => "Insurance",
+        (_, "company") => "Company",
+        (_, "industrial") => "Industry",
         _ => "",
     };
     if !label.is_empty() {
@@ -411,8 +490,17 @@ mod tests {
 
     #[test]
     fn labels_are_human_readable() {
-        assert_eq!(category_label("shop", "hardware"), "Ferretería");
-        assert_eq!(category_label("amenity", "restaurant"), "Restaurante");
-        assert_eq!(category_label("shop", "custom_thing"), "Custom thing");
+        assert_eq!(
+            category_label("shop", "hardware", Language::Es),
+            "Ferretería"
+        );
+        assert_eq!(
+            category_label("amenity", "restaurant", Language::Es),
+            "Restaurante"
+        );
+        assert_eq!(
+            category_label("shop", "custom_thing", Language::Es),
+            "Custom thing"
+        );
     }
 }

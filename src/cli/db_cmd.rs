@@ -1,4 +1,4 @@
-//! `nicascan db`: mantenimiento de la base SQLite.
+//! `businesscan db`: mantenimiento de la base SQLite.
 
 use std::fs;
 use std::path::PathBuf;
@@ -119,7 +119,7 @@ pub fn run(args: DbArgs, config: &Config, global: &GlobalArgs, theme: &Theme) ->
         DbCommand::Reset { yes } => {
             if !yes {
                 bail!(
-                    "Esto borra todos los datos. Ejecuta `nicascan db reset --yes` para confirmar."
+                    "Esto borra todos los datos. Ejecuta `businesscan db reset --yes` para confirmar."
                 );
             }
             for suffix in ["", "-wal", "-shm"] {

@@ -51,6 +51,10 @@ pub struct SearchParams {
     #[serde(default)]
     pub text: Option<String>,
     #[serde(default)]
+    pub country: Option<String>,
+    #[serde(default)]
+    pub continent: Option<String>,
+    #[serde(default)]
     pub departamento: Option<String>,
     #[serde(default)]
     pub municipio: Option<String>,
@@ -122,6 +126,25 @@ impl SearchParams {
                 )))
             }
         };
+        let gaz = crate::gazetteer::Gazetteer::global();
+        let countries = if let Some(raw) = self.country.as_deref() {
+            let country = gaz
+                .country(raw)
+                .ok_or_else(|| ApiError::bad_request(format!("País «{raw}» no reconocido")))?;
+            Some(vec![country.iso2.clone()])
+        } else if let Some(group) = self.continent.as_deref() {
+            let countries = gaz.countries_in_group(group).ok_or_else(|| {
+                ApiError::bad_request(format!("Continente o región «{group}» no reconocido"))
+            })?;
+            Some(
+                countries
+                    .into_iter()
+                    .map(|country| country.iso2.clone())
+                    .collect(),
+            )
+        } else {
+            None
+        };
         let text = self
             .q
             .clone()
@@ -130,6 +153,7 @@ impl SearchParams {
             .filter(|value| !value.is_empty());
         Ok(SearchQuery {
             text,
+            countries,
             departamento: self.departamento.clone(),
             municipio: self.municipio.clone(),
             barrio: self.barrio.clone(),
@@ -214,7 +238,7 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
 
 async fn root() -> Json<Value> {
     Json(json!({
-        "name": "NicaScan",
+        "name": "BusinessCan",
         "version": VERSION,
         "docs": "/openapi.json",
         "health": "/v1/health",
@@ -226,7 +250,7 @@ async fn root() -> Json<Value> {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "ok": true, "service": "nicascan", "version": VERSION }))
+    Json(json!({ "ok": true, "service": "businesscan", "version": VERSION }))
 }
 
 async fn list_businesses(
@@ -432,9 +456,9 @@ async fn openapi() -> Json<Value> {
     Json(json!({
         "openapi": "3.0.3",
         "info": {
-            "title": "NicaScan API",
+            "title": "BusinessCan API",
             "version": VERSION,
-            "description": "Directorio de negocios de Nicaragua para agentes de IA."
+            "description": "Directorio internacional de negocios para agentes de IA."
         },
         "servers": [{"url": "http://127.0.0.1:8787"}],
         "paths": {

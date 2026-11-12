@@ -1,4 +1,4 @@
-//! `nicascan overture`: descarga automática de Places desde PMTiles.
+//! `businesscan overture`: descarga automática de Places desde PMTiles.
 
 use std::time::Instant;
 
@@ -67,6 +67,7 @@ struct OvertureSummary {
     release: String,
     pmtiles_url: String,
     location: String,
+    locations: usize,
     zoom: u8,
     tiles: usize,
     fetched_tiles: usize,
@@ -123,29 +124,25 @@ async fn fetch_command(
     let http = HttpClient::new(config)?;
     let resolver = LocationResolver::new(config, http.clone());
 
-    let cache_key = input.cache_key();
-    let location = match if args.location.refresh_place {
-        None
+    let locations = if input.continent.is_some() {
+        resolver.resolve_many(&input).await?
     } else {
-        db.cached_place(&cache_key)?
-    } {
-        Some(location) => location,
-        None => {
-            let location = resolver
-                .resolve(&input)
-                .await
-                .map_err(|error| anyhow::anyhow!("No se pudo resolver la ubicación: {error:#}"))?;
-            db.save_place(&cache_key, &location)?;
-            location
+        let cache_key = input.cache_key();
+        match if args.location.refresh_place {
+            None
+        } else {
+            db.cached_place(&cache_key)?
+        } {
+            Some(location) => vec![location],
+            None => {
+                let location = resolver.resolve(&input).await.map_err(|error| {
+                    anyhow::anyhow!("No se pudo resolver la ubicación: {error:#}")
+                })?;
+                db.save_place(&cache_key, &location)?;
+                vec![location]
+            }
         }
     };
-
-    let bbox = exact_bbox(&location).ok_or_else(|| {
-        anyhow::anyhow!(
-            "No se pudo determinar un bbox para «{}». Usa --bbox, --lat/--lon o un municipio/departamento",
-            location.display_name
-        )
-    })?;
 
     let (release, url) = match args.pmtiles_url.clone() {
         Some(url) => {
@@ -164,53 +161,82 @@ async fn fetch_command(
 
     if !global.json && !global.quiet {
         output::banner(theme);
-        println!("  {} {}", theme.muted("Ubicación:"), location.display_name);
+        for location in &locations {
+            println!("  {} {}", theme.muted("Ubicación:"), location.display_name);
+        }
         println!("  {} {}", theme.muted("Release:"), release);
         println!("  {} {}", theme.muted("PMTiles:"), url);
         println!();
     }
 
     let started = Instant::now();
-    let (records, stats) = fetch_records(
-        &http,
-        &url,
-        &FetchOptions {
-            location: location.clone(),
-            bbox,
-            zoom: args.zoom,
-            max_tiles: args.max_tiles,
-            limit: args.limit,
-        },
-    )
-    .await?;
+    let mut records = Vec::new();
+    let mut total_tiles = 0usize;
+    let mut total_fetched_tiles = 0usize;
+    let mut total_features = 0usize;
+    let mut zoom = 0u8;
 
-    if !global.json && !global.quiet {
-        println!(
-            "  {} zoom {} · {} tiles · {} features · {} negocios · {:.1}s",
-            theme.success("✓"),
-            stats.zoom,
-            stats.tiles,
-            stats.features,
-            records.len(),
-            stats.duration_ms as f64 / 1000.0
-        );
-        if stats.fetched_tiles == 0 {
-            eprintln!(
-                "  {} No hay tiles PMTiles en zoom {}. Usa --zoom 14 (el archivo solo tiene datos en ese nivel).",
-                theme.warning("!"),
-                stats.zoom
+    for location in &locations {
+        let bbox = exact_bbox(location).ok_or_else(|| {
+            anyhow::anyhow!(
+                "No se pudo determinar un bbox para «{}». Usa --bbox, --lat/--lon o un municipio/departamento",
+                location.display_name
+            )
+        })?;
+        let (mut location_records, stats) = fetch_records(
+            &http,
+            &url,
+            &FetchOptions {
+                location: location.clone(),
+                bbox,
+                zoom: args.zoom,
+                max_tiles: args.max_tiles,
+                limit: args.limit,
+            },
+        )
+        .await?;
+        if !global.json && !global.quiet {
+            println!(
+                "  {} {} · zoom {} · {} tiles · {} features · {} negocios · {:.1}s",
+                theme.success("✓"),
+                location.display_name,
+                stats.zoom,
+                stats.tiles,
+                stats.features,
+                location_records.len(),
+                stats.duration_ms as f64 / 1000.0
             );
+            if stats.fetched_tiles == 0 {
+                eprintln!(
+                    "  {} No hay tiles PMTiles en zoom {}. Usa --zoom 14 (el archivo solo tiene datos en ese nivel).",
+                    theme.warning("!"),
+                    stats.zoom
+                );
+            }
         }
+        if zoom == 0 {
+            zoom = stats.zoom;
+        }
+        total_tiles += stats.tiles;
+        total_fetched_tiles += stats.fetched_tiles;
+        total_features += stats.features;
+        records.append(&mut location_records);
     }
 
+    let summary_location = if locations.len() == 1 {
+        locations[0].display_name.clone()
+    } else {
+        format!("{} países/áreas", locations.len())
+    };
     let mut summary = OvertureSummary {
         release,
         pmtiles_url: url,
-        location: location.display_name.clone(),
-        zoom: stats.zoom,
-        tiles: stats.tiles,
-        fetched_tiles: stats.fetched_tiles,
-        features: stats.features,
+        location: summary_location,
+        locations: locations.len(),
+        zoom,
+        tiles: total_tiles,
+        fetched_tiles: total_fetched_tiles,
+        features: total_features,
         records: records.len(),
         inserted: 0,
         merged: 0,

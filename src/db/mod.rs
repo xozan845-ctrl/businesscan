@@ -236,7 +236,7 @@ fn configure(conn: &Connection, file: bool) -> Result<()> {
          PRAGMA cache_size = -32000;",
     )?;
     if file {
-        // WAL permite lecturas concurrentes. `nicascan db checkpoint` consolida
+        // WAL permite lecturas concurrentes. `businesscan db checkpoint` consolida
         // los archivos auxiliares antes de copiar la base a mano.
         let _ = conn
             .pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get::<_, String>(0));

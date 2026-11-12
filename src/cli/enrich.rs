@@ -1,4 +1,4 @@
-//! `nicascan enrich`: completa fichas desde el sitio web del negocio.
+//! `businesscan enrich`: completa fichas desde el sitio web del negocio.
 
 use std::collections::HashSet;
 use std::time::{Duration, Instant};

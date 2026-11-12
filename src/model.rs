@@ -327,7 +327,10 @@ impl Business {
             parts.push(v);
         }
         if parts.is_empty() {
-            "Nicaragua".to_string()
+            self.address
+                .country_code
+                .clone()
+                .unwrap_or_else(|| "Sin ubicación".to_string())
         } else {
             parts.join(", ")
         }
@@ -414,6 +417,7 @@ pub enum SortBy {
 #[derive(Debug, Clone, Default)]
 pub struct SearchQuery {
     pub text: Option<String>,
+    pub countries: Option<Vec<String>>,
     pub departamento: Option<String>,
     pub municipio: Option<String>,
     pub barrio: Option<String>,
@@ -477,6 +481,7 @@ pub struct Stats {
     pub with_coordinates: i64,
     pub with_address: i64,
     pub avg_quality: f64,
+    pub by_country: Vec<CountRow>,
     pub by_departamento: Vec<CountRow>,
     pub by_category: Vec<CountRow>,
     pub by_source: Vec<CountRow>,

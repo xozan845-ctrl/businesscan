@@ -1,4 +1,4 @@
-//! `nicascan show`: ficha completa de un negocio.
+//! `businesscan show`: ficha completa de un negocio.
 
 use anyhow::Result;
 use clap::Args;

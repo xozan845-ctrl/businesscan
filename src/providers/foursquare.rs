@@ -244,8 +244,8 @@ pub fn map_place(place: &Value, request: &ProviderRequest) -> Option<BusinessRec
         country_code: location
             .get("country")
             .and_then(Value::as_str)
-            .map(|s| s.to_uppercase())
-            .or_else(|| Some("NI".to_string())),
+            .and_then(|value| crate::gazetteer::Gazetteer::global().normalize_country_code(value))
+            .or_else(|| request.location.country_code.clone()),
     };
     if address.departamento.is_none() {
         address.departamento = request.location.departamento.clone();
@@ -408,6 +408,9 @@ mod tests {
             location: ResolvedLocation {
                 query: "Granada".into(),
                 display_name: "Granada, Nicaragua".into(),
+                country_code: Some("NI".into()),
+                country_name: Some("Nicaragua".into()),
+                continent: Some("North America".into()),
                 departamento: Some("Granada".into()),
                 municipio: Some("Granada".into()),
                 barrio: None,
@@ -427,6 +430,7 @@ mod tests {
             category: None,
             limit: None,
             include_unnamed: false,
+            language: crate::i18n::Language::Es,
             page_size: 50,
             max_pages: 1,
         }
