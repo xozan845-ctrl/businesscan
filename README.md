@@ -476,7 +476,15 @@ make dist
 - [x] API local para agentes (`nicascan serve`).
 - [x] Calidad de ficha, revisión de duplicados y fusión manual.
 - [x] Panel web de búsqueda, calidad y revisión de duplicados.
-- [ ] Extracción Overture de país completo sin DuckDB (requiere dataset particionado por país).
+
+### Limitación conocida de Overture
+
+El PMTiles público de Overture Places solo está poblado en zoom 14. Para un
+barrio, ciudad o área mediana funciona muy bien; para **todo Nicaragua** el
+número de tiles crece a decenas de miles y el volumen ronda varios GB. En ese
+caso usa `scan --overture-file` con un extracto preparado con DuckDB (ver
+`docs/SOURCES.md`), o sube `--max-tiles` asumiendo la descarga. No es una
+limitación de NicaScan sino del dataset público.
 
 ## Licencia
 
