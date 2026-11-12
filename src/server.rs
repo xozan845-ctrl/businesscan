@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
 use crate::config::Config;
-use crate::db::business::{get_full, search, search_full};
+use crate::db::business::{get_full, merge_businesses, search, search_full};
 use crate::db::Database;
 use crate::model::{SearchQuery, SortBy};
 use crate::version::VERSION;
@@ -36,6 +36,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/v1/export", get(export_handler))
         .route("/v1/stats", get(stats_handler))
         .route("/v1/sources", get(sources_handler))
+        .route("/v1/duplicates", get(duplicates_handler))
+        .route("/v1/merge", post(merge_handler))
+        .route("/panel", get(panel))
         .route("/openapi.json", get(openapi))
         .layer(CorsLayer::permissive())
         .with_state(state)
@@ -218,6 +221,7 @@ async fn root() -> Json<Value> {
         "businesses": "/v1/businesses",
         "search": "POST /v1/search",
         "export": "/v1/export?q=...",
+        "panel": "/panel",
     }))
 }
 
@@ -368,6 +372,62 @@ async fn export_handler(
     Ok(response)
 }
 
+#[derive(Debug, Deserialize, Default)]
+struct DuplicateParams {
+    #[serde(default)]
+    min_score: Option<f64>,
+    #[serde(default)]
+    max_distance: Option<f64>,
+    #[serde(default)]
+    limit: Option<usize>,
+}
+
+async fn duplicates_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<DuplicateParams>,
+) -> Result<Json<Value>, ApiError> {
+    authorize(&state, &headers)?;
+    let min_score = params.min_score.unwrap_or(0.75);
+    let max_distance = params.max_distance.unwrap_or(5_000.0);
+    let limit = params.limit.unwrap_or(50).min(500);
+    if !(0.0..=1.0).contains(&min_score) {
+        return Err(ApiError::bad_request("min_score debe estar entre 0 y 1"));
+    }
+    let db = state.db.lock().await;
+    let pairs = db
+        .find_duplicates(min_score, max_distance, limit)
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "count": pairs.len(), "results": pairs })))
+}
+
+#[derive(Debug, Deserialize)]
+struct MergeBody {
+    keep: String,
+    other: String,
+    #[serde(default)]
+    confirm: bool,
+}
+
+async fn merge_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<MergeBody>,
+) -> Result<Json<Value>, ApiError> {
+    authorize(&state, &headers)?;
+    if !body.confirm {
+        return Err(ApiError::bad_request("confirm debe ser true para fusionar"));
+    }
+    let mut db = state.db.lock().await;
+    let kept = merge_businesses(&mut db, &body.keep, &body.other)
+        .map_err(|error| ApiError::bad_request(format!("{error:#}")))?;
+    Ok(Json(json!({ "ok": true, "kept": kept })))
+}
+
+async fn panel() -> Html<&'static str> {
+    Html(include_str!("web/panel.html"))
+}
+
 async fn openapi() -> Json<Value> {
     Json(json!({
         "openapi": "3.0.3",
@@ -384,7 +444,10 @@ async fn openapi() -> Json<Value> {
             "/v1/search": {"post": {"summary": "Búsqueda por JSON"}},
             "/v1/export": {"get": {"summary": "Exporta JSONL"}},
             "/v1/stats": {"get": {"summary": "Estadísticas y cobertura"}},
-            "/v1/sources": {"get": {"summary": "Fuentes y disponibilidad"}}
+            "/v1/sources": {"get": {"summary": "Fuentes y disponibilidad"}},
+            "/v1/duplicates": {"get": {"summary": "Posibles duplicados"}},
+            "/v1/merge": {"post": {"summary": "Fusiona dos negocios (confirm=true)"}},
+            "/panel": {"get": {"summary": "Panel web de revisión"}}
         }
     }))
 }

@@ -23,12 +23,14 @@ pub fn run(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i32> {
         .into_iter()
         .map(|provider| {
             let available = provider.is_available(config);
-            let status = if !provider.requires_key() {
-                if available {
-                    "lista".to_string()
+            let status = if provider.name() == "overture" {
+                if config.overture_file.is_some() {
+                    "lista (archivo local)".to_string()
                 } else {
-                    "falta --overture-file".to_string()
+                    "lista (PMTiles)".to_string()
                 }
+            } else if !provider.requires_key() {
+                "lista".to_string()
             } else if available {
                 "clave configurada".to_string()
             } else {
@@ -87,8 +89,8 @@ pub fn run(config: &Config, global: &GlobalArgs, theme: &Theme) -> Result<i32> {
     println!(
         "  {}",
         theme.muted(
-            "Variables: GOOGLE_PLACES_API_KEY, FOURSQUARE_API_KEY; Overture usa \
-             NICASCAN_OVERTURE_FILE o --overture-file. OSM no requiere clave."
+            "Variables: GOOGLE_PLACES_API_KEY, FOURSQUARE_API_KEY. \
+             Overture usa PMTiles automático o --overture-file; OSM no requiere clave."
         )
     );
     println!(

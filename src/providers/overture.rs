@@ -31,15 +31,15 @@ impl Provider for OvertureProvider {
     }
 
     fn description(&self) -> &'static str {
-        "Overture Maps desde un GeoJSON local extraído con DuckDB (--overture-file)"
+        "Overture Maps por PMTiles (automático) o desde un GeoJSON local con --overture-file"
     }
 
     fn requires_key(&self) -> bool {
         false
     }
 
-    fn is_available(&self, config: &Config) -> bool {
-        config.overture_file.is_some()
+    fn is_available(&self, _config: &Config) -> bool {
+        true
     }
 
     fn default_enabled(&self) -> bool {
@@ -51,12 +51,23 @@ impl Provider for OvertureProvider {
         ctx: &ProviderContext,
         request: &ProviderRequest,
     ) -> Result<Vec<BusinessRecord>> {
-        let path = ctx
-            .config
-            .overture_file
-            .as_deref()
-            .context("Falta --overture-file o NICASCAN_OVERTURE_FILE")?;
-        fetch_file(path, request).await
+        if let Some(path) = ctx.config.overture_file.as_deref() {
+            return fetch_file(path, request).await;
+        }
+        let bbox = crate::providers::overture_pmtiles::exact_bbox(&request.location)
+            .context("No se pudo determinar el bbox para Overture")?;
+        let release = crate::providers::overture_pmtiles::latest_release(&ctx.http).await?;
+        let url = crate::providers::overture_pmtiles::pmtiles_url(&release);
+        let options = crate::providers::overture_pmtiles::FetchOptions {
+            location: request.location.clone(),
+            bbox,
+            zoom: None,
+            max_tiles: 200,
+            limit: request.limit,
+        };
+        let (records, _stats) =
+            crate::providers::overture_pmtiles::fetch_records(&ctx.http, &url, &options).await?;
+        Ok(records)
     }
 }
 
@@ -181,7 +192,7 @@ fn feature_point(feature: &Value) -> Option<(f64, f64)> {
     Some((lon, lat))
 }
 
-fn in_location(lon: f64, lat: f64, location: &ResolvedLocation) -> bool {
+pub(crate) fn in_location(lon: f64, lat: f64, location: &ResolvedLocation) -> bool {
     match &location.filter {
         GeoFilter::Around {
             lat: center_lat,
@@ -223,6 +234,7 @@ pub fn feature_to_record(feature: &Value, lon: f64, lat: f64) -> Option<Business
     if name.is_none() {
         name = properties
             .get("name")
+            .or_else(|| properties.get("@name"))
             .and_then(Value::as_str)
             .map(ToString::to_string);
     }

@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NicaScan · Panel</title>
+<style>
+  :root {
+    --bg: #070d18;
+    --panel: #0d1728;
+    --panel-2: #111f35;
+    --line: #1c2f4d;
+    --ink: #e7eefb;
+    --muted: #8da2c0;
+    --faint: #5c7397;
+    --cyan: #22d3ee;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #fb7185;
+    --violet: #a78bfa;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(1000px 500px at 10% -10%, #10304a 0%, transparent 55%),
+      radial-gradient(900px 500px at 100% 0%, #221a45 0%, transparent 50%),
+      var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  a { color: var(--cyan); }
+  .wrap { max-width: 1220px; margin: 0 auto; padding: 22px 18px 60px; }
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 8px 0 18px;
+  }
+  .logo { font-size: 24px; font-weight: 800; letter-spacing: .4px; }
+  .logo span { color: var(--cyan); }
+  .tag { color: var(--muted); font-size: 13px; }
+  .spacer { flex: 1; }
+  .token-box { display: flex; gap: 6px; align-items: center; }
+  input, select, button, textarea {
+    font: inherit; color: var(--ink);
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 11px; outline: none;
+  }
+  input:focus, select:focus { border-color: #2e5a8a; box-shadow: 0 0 0 3px #22d3ee18; }
+  button { cursor: pointer; transition: .15s; }
+  button:hover { border-color: #2e5a8a; transform: translateY(-1px); }
+  button.primary { background: linear-gradient(135deg, #0891b2, #0e7490); border-color: #155e75; color: white; font-weight: 650; }
+  button.ghost { background: transparent; }
+  button.danger { background: #3b1220; border-color: #6b1f34; color: #fecdd3; }
+  .tabs { display: flex; gap: 8px; margin: 4px 0 18px; flex-wrap: wrap; }
+  .tab {
+    background: transparent; border: 1px solid transparent; color: var(--muted);
+    padding: 8px 14px; border-radius: 999px; font-weight: 600;
+  }
+  .tab.active { color: var(--ink); background: #12243c; border-color: var(--line); }
+  .grid { display: grid; gap: 14px; }
+  .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .card {
+    background: linear-gradient(180deg, #0e1a2d, #0b1525);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
+  }
+  .stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .8px; }
+  .stat .value { font-size: 28px; font-weight: 800; margin-top: 4px; }
+  .stat .hint { color: var(--faint); font-size: 12px; }
+  .toolbar { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 10px; align-items: end; }
+  @media (max-width: 900px) { .toolbar { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .toolbar { grid-template-columns: 1fr; } }
+  .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+  .field input, .field select { width: 100%; }
+  .checks { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0; color: var(--muted); }
+  .checks label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .checks input { accent-color: var(--cyan); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 11px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; font-weight: 650; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #10213a; }
+  .name { font-weight: 650; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: #16283f; color: var(--muted); border: 1px solid var(--line); }
+  .pill.good { color: var(--green); border-color: #14532d; background: #052e1b; }
+  .pill.warn { color: var(--amber); border-color: #713f12; background: #2a1b05; }
+  .pill.bad { color: var(--red); border-color: #7f1d1d; background: #2a0a0f; }
+  .bar { height: 7px; background: #10203a; border-radius: 999px; overflow: hidden; min-width: 60px; }
+  .bar > i { display: block; height: 100%; background: linear-gradient(90deg, #0891b2, #22d3ee); }
+  .empty { color: var(--muted); text-align: center; padding: 36px 10px; }
+  .error { display: none; background: #2a0a0f; border: 1px solid #7f1d1d; color: #fecdd3; padding: 11px 14px; border-radius: 10px; margin: 12px 0; }
+  .error.show { display: block; }
+  .dupe { display: grid; grid-template-columns: 1fr 110px 1fr; gap: 14px; align-items: center; }
+  @media (max-width: 760px) { .dupe { grid-template-columns: 1fr; } }
+  .dupe-side { background: #0c182a; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .dupe-mid { text-align: center; color: var(--muted); }
+  .score { font-size: 22px; font-weight: 800; color: var(--amber); }
+  .reasons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .modal { position: fixed; inset: 0; background: #02060dcc; backdrop-filter: blur(4px); display: none; align-items: flex-start; justify-content: center; padding: 30px 14px; overflow: auto; z-index: 50; }
+  .modal.open { display: flex; }
+  .sheet { width: min(860px, 100%); background: #0b1626; border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: 0 30px 80px #0008; }
+  .sheet h2 { margin: 0 0 4px; }
+  .sheet .close { float: right; }
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; margin: 12px 0; }
+  .kv .k { color: var(--muted); font-size: 13px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  pre { white-space: pre-wrap; word-break: break-word; background: #07111f; border: 1px solid var(--line); border-radius: 10px; padding: 12px; color: #b7c8e2; font-size: 12px; }
+  .foot { color: var(--faint); font-size: 12px; margin-top: 28px; text-align: center; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="logo">◈ NICA<span>SCAN</span></div>
+      <div class="tag">Panel de revisión · directorio de negocios de Nicaragua</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="token-box">
+      <input id="token" type="password" placeholder="Token (si aplica)" autocomplete="off" style="width:170px">
+      <button class="ghost" onclick="saveToken()">Guardar</button>
+    </div>
+  </header>
+
+  <div id="error" class="error"></div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="search" onclick="setTab('search')">Buscar</button>
+    <button class="tab" data-tab="dupes" onclick="setTab('dupes')">Duplicados</button>
+    <button class="tab" data-tab="stats" onclick="setTab('stats')">Resumen</button>
+  </div>
+
+  <section id="tab-search">
+    <div class="card">
+      <div class="toolbar">
+        <div class="field">
+          <label>Texto libre</label>
+          <input id="q" placeholder="farmacia, ferretería, nombre…" onkeydown="if(event.key==='Enter')searchBusinesses()">
+        </div>
+        <div class="field"><label>Departamento</label><input id="departamento" placeholder="León"></div>
+        <div class="field"><label>Municipio</label><input id="municipio" placeholder="Managua"></div>
+        <div class="field"><label>Categoría</label><input id="category" placeholder="restaurante"></div>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="has_phone"> Con teléfono</label>
+        <label><input type="checkbox" id="has_website"> Con web</label>
+        <label><input type="checkbox" id="has_email"> Con correo</label>
+        <label>Calidad mínima <input id="min_quality" type="number" min="0" max="1" step="0.1" placeholder="0.5" style="width:90px"></label>
+        <label>Límite <input id="limit" type="number" min="1" max="500" value="25" style="width:82px"></label>
+      </div>
+      <div class="actions">
+        <button class="primary" onclick="searchBusinesses()">Buscar</button>
+        <button class="ghost" onclick="exportJsonl()">Exportar JSONL</button>
+        <button class="ghost" onclick="clearSearch()">Limpiar</button>
+      </div>
+    </div>
+    <div id="search-meta" class="sub" style="margin:14px 2px"></div>
+    <div id="results"></div>
+  </section>
+
+  <section id="tab-dupes" class="hidden">
+    <div class="card">
+      <div class="toolbar" style="grid-template-columns: 1fr 1fr 1fr auto">
+        <div class="field"><label>Score mínimo</label><input id="dupe-score" type="number" min="0" max="1" step="0.05" value="0.75"></div>
+        <div class="field"><label>Distancia máxima (m)</label><input id="dupe-distance" type="number" min="0" value="5000"></div>
+        <div class="field"><label>Máximo</label><input id="dupe-limit" type="number" min="1" max="500" value="50"></div>
+        <button class="primary" onclick="loadDuplicates()">Revisar</button>
+      </div>
+      <p class="sub">Fusiona solo cuando estés seguro. La operación mueve contactos, etiquetas y procedencia al negocio que conservas.</p>
+    </div>
+    <div id="dupes" style="margin-top:14px"></div>
+  </section>
+
+  <section id="tab-stats" class="hidden">
+    <div id="stats" class="grid stats"></div>
+    <div id="stats-lists" style="margin-top:14px"></div>
+  </section>
+
+  <div class="foot">NicaScan · datos © OpenStreetMap (ODbL), Google, Foursquare y Overture según sus licencias.</div>
+</div>
+
+<div id="modal" class="modal" onclick="if(event.target===this)closeModal()">
+  <div class="sheet">
+    <button class="ghost close" onclick="closeModal()">Cerrar</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let activeTab = 'search';
+let resultsCache = [];
+
+function token() { return localStorage.getItem('nicascan_token') || $('token').value.trim(); }
+function saveToken() {
+  localStorage.setItem('nicascan_token', $('token').value.trim());
+  flash('Token guardado en este navegador.');
+}
+function headers() {
+  const h = { 'Content-Type': 'application/json' };
+  const t = token();
+  if (t) h['Authorization'] = 'Bearer ' + t;
+  return h;
+}
+function showError(message) {
+  const box = $('error');
+  box.textContent = message;
+  box.classList.add('show');
+  setTimeout(() => box.classList.remove('show'), 7000);
+}
+function flash(message) {
+  const box = $('error');
+  box.textContent = message;
+  box.style.background = '#052e1b';
+  box.style.borderColor = '#14532d';
+  box.style.color = '#bbf7d0';
+  box.classList.add('show');
+  setTimeout(() => {
+    box.classList.remove('show');
+    box.style.background = '';
+    box.style.borderColor = '';
+    box.style.color = '';
+  }, 4000);
+}
+async function api(path, options = {}) {
+  const response = await fetch(path, { ...options, headers: headers() });
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) { data = text; }
+  if (!response.ok) throw new Error((data && data.error) || text || ('HTTP ' + response.status));
+  return data;
+}
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function pct(value) { return Math.round((Number(value) || 0) * 100) + '%'; }
+function shortId(id) { return String(id || '').slice(-8); }
+function setTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  $('tab-search').classList.toggle('hidden', tab !== 'search');
+  $('tab-dupes').classList.toggle('hidden', tab !== 'dupes');
+  $('tab-stats').classList.toggle('hidden', tab !== 'stats');
+  if (tab === 'dupes') loadDuplicates();
+  if (tab === 'stats') loadStats();
+}
+function queryParams() {
+  const params = new URLSearchParams();
+  const add = (key, value) => { if (value !== '' && value !== null && value !== undefined) params.set(key, value); };
+  add('q', $('q').value.trim());
+  add('departamento', $('departamento').value.trim());
+  add('municipio', $('municipio').value.trim());
+  add('category', $('category').value.trim());
+  if ($('has_phone').checked) add('has_phone', 'true');
+  if ($('has_website').checked) add('has_website', 'true');
+  if ($('has_email').checked) add('has_email', 'true');
+  add('min_quality', $('min_quality').value);
+  add('limit', $('limit').value || 25);
+  return params;
+}
+function clearSearch() {
+  ['q','departamento','municipio','category','min_quality'].forEach(id => $(id).value = '');
+  ['has_phone','has_website','has_email'].forEach(id => $(id).checked = false);
+  $('results').innerHTML = '';
+  $('search-meta').textContent = '';
+}
+async function searchBusinesses() {
+  const params = queryParams();
+  $('search-meta').textContent = 'Buscando…';
+  try {
+    const data = await api('/v1/businesses?' + params.toString());
+    resultsCache = data.results || [];
+    $('search-meta').textContent = data.count + ' resultados';
+    renderResults(resultsCache);
+  } catch (error) {
+    $('search-meta').textContent = '';
+    showError(error.message);
+  }
+}
+function renderResults(items) {
+  if (!items.length) {
+    $('results').innerHTML = '<div class="card empty">No se encontraron negocios con esos filtros.</div>';
+    return;
+  }
+  const rows = items.map((b, index) => `
+    <tr onclick="openDetail(${index})">
+      <td><div class="name">${esc(b.name)}</div><div class="sub">${esc(b.primary_category || b.business_type || 'sin categoría')} · ${esc(b.address?.municipio || '—')}</div></td>
+      <td>${esc(b.address?.departamento || '—')}<div class="sub">${esc(b.address?.barrio || b.address?.comarca || '')}</div></td>
+      <td>${esc(b.phone_primary || '—')}<div class="sub">${b.email_primary ? '✉' : ''} ${b.website ? '🌐' : ''}</div></td>
+      <td><span class="pill ${b.quality_score >= .7 ? 'good' : b.quality_score >= .45 ? 'warn' : 'bad'}">${pct(b.quality_score)}</span></td>
+      <td><span class="pill">${b.source_count}</span></td>
+      <td class="sub">${shortId(b.id)}</td>
+    </tr>`).join('');
+  $('results').innerHTML = `<div class="card" style="padding:0;overflow:auto"><table>
+    <thead><tr><th>Negocio</th><th>Ubicación</th><th>Contacto</th><th>Calidad</th><th>Fuentes</th><th>ID</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+async function openDetail(index) {
+  const base = resultsCache[index];
+  try {
+    const full = await api('/v1/businesses/' + encodeURIComponent(base.id));
+    renderDetail(full);
+  } catch (error) { showError(error.message); }
+}
+function renderDetail(b) {
+  const contacts = (b.contacts || []).map(c => `<span class="pill">${esc(c.kind)} · ${esc(c.value)}</span>`).join('');
+  const sources = (b.sources || []).map(s => `<div class="sub">${esc(s.source)} · ${esc(s.external_id)} ${s.url ? '· ' + `<a href="${esc(s.url)}" target="_blank" rel="noreferrer">abrir</a>` : ''}</div>`).join('');
+  const tags = Object.entries(b.tags || {}).map(([k,v]) => `<span class="pill">${esc(k)}=${esc(v)}</span>`).join('');
+  const address = [
+    b.address?.line, b.address?.street, b.address?.house_number, b.address?.barrio,
+    b.address?.municipio, b.address?.departamento
+  ].filter(Boolean).join(', ');
+  $('modal-body').innerHTML = `
+    <h2>${esc(b.name)}</h2>
+    <div class="sub">${esc(b.primary_category || b.business_type || 'sin categoría')} · ${esc(b.status || 'estado desconocido')} · ${shortId(b.id)}</div>
+    <div class="chips" style="margin:12px 0">
+      <span class="pill ${b.quality_score >= .7 ? 'good' : 'warn'}">Calidad ${pct(b.quality_score)}</span>
+      <span class="pill">Confianza ${pct(b.confidence)}</span>
+      <span class="pill">${b.source_count} fuente(s)</span>
+      ${b.rating ? `<span class="pill warn">★ ${b.rating}</span>` : ''}
+    </div>
+    ${b.description ? `<p>${esc(b.description)}</p>` : ''}
+    <div class="kv">
+      <div class="k">Dirección</div><div>${esc(address || '—')}</div>
+      <div class="k">Coordenadas</div><div>${b.latitude ? `${b.latitude.toFixed(6)}, ${b.longitude.toFixed(6)}` : '—'}</div>
+      <div class="k">Horario</div><div>${esc(b.opening_hours || '—')}</div>
+      <div class="k">Web</div><div>${b.website ? `<a href="${esc(b.website)}" target="_blank" rel="noreferrer">${esc(b.website)}</a>` : '—'}</div>
+      <div class="k">Correo</div><div>${esc(b.email_primary || '—')}</div>
+    </div>
+    <h3>Contactos</h3><div class="chips">${contacts || '<span class="sub">Sin contactos</span>'}</div>
+    <h3 style="margin-top:18px">Categorías y etiquetas</h3>
+    <div class="chips">${(b.categories || []).map(c => `<span class="pill">${esc(c)}</span>`).join('')}${tags}</div>
+    <h3 style="margin-top:18px">Procedencia</h3>${sources || '<div class="sub">Sin fuentes</div>'}
+    <details style="margin-top:16px"><summary class="sub">Ver JSON completo</summary><pre>${esc(JSON.stringify(b, null, 2))}</pre></details>
+  `;
+  $('modal').classList.add('open');
+}
+function closeModal() { $('modal').classList.remove('open'); }
+async function exportJsonl() {
+  const params = queryParams();
+  params.set('limit', '1000');
+  try {
+    const response = await fetch('/v1/export?' + params.toString(), { headers: headers() });
+    if (!response.ok) throw new Error('No se pudo exportar (HTTP ' + response.status + ')');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'nicascan.jsonl';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) { showError(error.message); }
+}
+async function loadDuplicates() {
+  const params = new URLSearchParams({
+    min_score: $('dupe-score').value || '0.75',
+    max_distance: $('dupe-distance').value || '5000',
+    limit: $('dupe-limit').value || '50'
+  });
+  $('dupes').innerHTML = '<div class="card empty">Buscando duplicados…</div>';
+  try {
+    const data = await api('/v1/duplicates?' + params.toString());
+    renderDuplicates(data.results || []);
+  } catch (error) {
+    $('dupes').innerHTML = '';
+    showError(error.message);
+  }
+}
+function renderDuplicates(pairs) {
+  if (!pairs.length) {
+    $('dupes').innerHTML = '<div class="card empty">No hay pares sospechosos con ese umbral. 🎉</div>';
+    return;
+  }
+  $('dupes').innerHTML = pairs.map((pair, index) => `
+    <div class="card" style="margin-bottom:12px">
+      <div class="dupe">
+        <div class="dupe-side">
+          <div class="name">${esc(pair.left.name)}</div>
+          <div class="sub">${esc(pair.left.primary_category || '—')} · ${esc(pair.left.municipio || '—')} · ${shortId(pair.left.id)}</div>
+          <div class="sub">${esc(pair.left.phone_primary || 'sin teléfono')} ${pair.left.website ? '· ' + esc(pair.left.website) : ''}</div>
+          <div class="actions"><button class="primary" onclick="mergePair(${index}, 'left')">Conservar este</button></div>
+        </div>
+        <div class="dupe-mid">
+          <div class="score">${pct(pair.score)}</div>
+          <div class="sub">${pair.distance_m != null ? Math.round(pair.distance_m) + ' m' : 'sin coordenadas'}</div>
+          <div class="reasons">${(pair.reasons || []).map(r => `<span class="pill warn">${esc(r)}</span>`).join('')}</div>
+        </div>
+        <div class="dupe-side">
+          <div class="name">${esc(pair.right.name)}</div>
+          <div class="sub">${esc(pair.right.primary_category || '—')} · ${esc(pair.right.municipio || '—')} · ${shortId(pair.right.id)}</div>
+          <div class="sub">${esc(pair.right.phone_primary || 'sin teléfono')} ${pair.right.website ? '· ' + esc(pair.right.website) : ''}</div>
+          <div class="actions"><button class="primary" onclick="mergePair(${index}, 'right')">Conservar este</button></div>
+        </div>
+      </div>
+    </div>`).join('');
+  window._dupes = pairs;
+}
+async function mergePair(index, side) {
+  const pair = window._dupes[index];
+  const keep = side === 'left' ? pair.left : pair.right;
+  const other = side === 'left' ? pair.right : pair.left;
+  if (!confirm(`Se conservará "${keep.name}" y se absorberá "${other.name}".\n\n¿Continuar?`)) return;
+  try {
+    await api('/v1/merge', {
+      method: 'POST',
+      body: JSON.stringify({ keep: keep.id, other: other.id, confirm: true })
+    });
+    flash('Fusión completada.');
+    loadDuplicates();
+    if (activeTab === 'stats') loadStats();
+  } catch (error) { showError(error.message); }
+}
+async function loadStats() {
+  try {
+    const s = await api('/v1/stats');
+    const coverage = [
+      ['Teléfono', s.with_phone], ['Correo', s.with_email], ['Web', s.with_website],
+      ['Coordenadas', s.with_coordinates], ['Dirección', s.with_address]
+    ];
+    const total = Math.max(1, s.total_businesses);
+    $('stats').innerHTML = `
+      <div class="card stat"><div class="label">Negocios</div><div class="value">${Number(s.total_businesses).toLocaleString('es')}</div><div class="hint">calidad media ${pct(s.avg_quality)}</div></div>
+      ${coverage.map(([label, value]) => `<div class="card stat"><div class="label">${label}</div><div class="value">${pct(value / total)}</div><div class="bar" style="margin-top:8px"><i style="width:${Math.min(100, value / total * 100)}%"></i></div></div>`).join('')}
+    `;
+    const list = (title, rows, max = 20) => {
+      if (!rows || !rows.length) return '';
+      return `<div class="card" style="margin-bottom:12px"><h3 style="margin-top:0">${title}</h3>${rows.slice(0, max).map(r => `<div style="display:flex;gap:10px;align-items:center;margin:5px 0"><div style="width:190px" class="sub">${esc(r.label)}</div><div class="bar" style="flex:1"><i style="width:${Math.min(100, r.count / rows[0].count * 100)}%"></i></div><div class="sub">${Number(r.count).toLocaleString('es')}</div></div>`).join('')}</div>`;
+    };
+    $('stats-lists').innerHTML = list('Por departamento', s.by_departamento) + list('Por categoría', s.by_category) + list('Por fuente', s.by_source);
+  } catch (error) { showError(error.message); }
+}
+$('token').value = localStorage.getItem('nicascan_token') || '';
+if (localStorage.getItem('nicascan_token')) searchBusinesses();
+</script>
+</body>
+</html>

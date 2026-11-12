@@ -31,8 +31,8 @@ quién ofrecerle qué servicio.
 ## Qué incluye
 
 - **Múltiples fuentes conectables**: OpenStreetMap/Overpass (sin clave), Google
-  Places (opcional, de pago), Foursquare Places (opcional), Overture Maps desde
-  un GeoJSON local e importación de CSV/JSON/JSONL.
+  Places (opcional, de pago), Foursquare Places (opcional), Overture Maps
+  (descarga automática por PMTiles o GeoJSON local) e importación CSV/JSON/JSONL.
 - **Búsqueda por ubicación**: país, departamento, municipio, barrio, comarca,
   radio alrededor de coordenadas o bounding box. La geocodificación usa
   Nominatim y se cachea.
@@ -148,7 +148,8 @@ Cambia la ruta con `--db /ruta/negocios.db` o `NICASCAN_DB`.
 | `enrich` | Completa fichas desde el sitio web del negocio. |
 | `duplicates` | Encuentra pares sospechosos que no se fusionaron. |
 | `merge` | Fusiona dos negocios manualmente (con `--yes`). |
-| `serve` | API HTTP local + OpenAPI para agentes de IA. |
+| `overture` | Descarga Places de Overture por PMTiles (`fetch`) o muestra la release (`latest`). |
+| `serve` | API HTTP local + OpenAPI + panel de revisión. |
 | `sources` | Lista fuentes, claves requeridas y disponibilidad. |
 | `stats` | Cobertura, calidad, distribución y últimas consultas. |
 | `places` | Geocodifica, lista o limpia la caché de ubicaciones. |
@@ -180,9 +181,13 @@ nicascan scan --all --limit 1000
 nicascan scan --departamento León --category ferreteria,restaurante \
   --source osm,google --limit 100
 
-# Overture Maps desde un extracto GeoJSON (ver docs/SOURCES.md)
-nicascan scan --all --source overture \
-  --overture-file overture-managua.geojson
+# Overture Maps automático por tiles (barrio, ciudad o área)
+nicascan overture fetch --departamento Managua --municipio Managua --limit 500
+nicascan overture fetch --barrio "Martha Quezada" --municipio Managua --limit 200
+nicascan overture fetch --lat 12.1364 --lon -86.2514 --radius 800 --limit 100
+
+# Overture desde un GeoJSON ya extraído (país completo o sin red)
+nicascan scan --all --source overture --overture-file overture-nicaragua.geojson
 ```
 
 Opciones importantes:
@@ -253,13 +258,28 @@ procedencia. También importa JSON anidado con `contacts` y `address`.
 | `osm` | No | Gratis | Cobertura amplia, contactos, horarios, dirección, redes sociales. |
 | `google` | `GOOGLE_PLACES_API_KEY` | De pago / cuota | Rating, reseñas, horarios, atributos, tipos, estado. |
 | `foursquare` | `FOURSQUARE_API_KEY` | Plan gratuito limitado | Categorías, contacto, redes sociales, horarios, popularidad. |
-| `overture` | Archivo local | Gratis | Places de Overture desde un GeoJSON extraído con DuckDB. |
+| `overture` | No | Gratis | Places de Overture por PMTiles (descarga solo los tiles del área) o GeoJSON local. |
 | `web` | No | Gratis | Enriquecimiento desde el sitio oficial del negocio. |
 | `import` | No | Gratis | Datasets de MIFIC, cámaras, INE, planillas propias. |
 
 Por defecto se usan todas las fuentes **configuradas** (OSM y Google/Foursquare
-si tienen clave). Overture es opt-in con `--source overture --overture-file`.
-Puedes forzar `--source osm` para evitar llamadas de pago.
+si tienen clave). Overture se descarga automáticamente con `scan --source overture`
+o `overture fetch`, o se lee local con `--overture-file`. Puedes forzar
+`--source osm` para evitar llamadas de pago.
+
+### Overture automático
+
+```bash
+nicascan overture latest
+nicascan overture fetch --departamento León --limit 300
+nicascan overture fetch --lat 12.1364 --lon -86.2514 --radius 1000 --limit 100
+```
+
+El comando descubre la release más reciente, lee el PMTiles por HTTP Range y
+solo descarga los tiles que cubren el área. No requiere DuckDB ni bajar 12 GB.
+El PMTiles público tiene datos en zoom 14; para áreas muy grandes (país
+completo) usa `scan --overture-file` con un extracto DuckDB, o sube
+`--max-tiles` si estás dispuesto a descargar cientos de MB.
 
 Más detalle de mapeo y políticas en [docs/SOURCES.md](docs/SOURCES.md).
 
@@ -367,6 +387,9 @@ Endpoints:
 | GET | `/v1/export` | JSONL para streaming. |
 | GET | `/v1/stats` | Cobertura y calidad. |
 | GET | `/v1/sources` | Fuentes configuradas. |
+| GET | `/v1/duplicates` | Pares sospechosos para revisión. |
+| POST | `/v1/merge` | Fusión manual (`confirm:true`). |
+| GET | `/panel` | Panel web de búsqueda y revisión. |
 | GET | `/openapi.json` | Especificación OpenAPI mínima. |
 
 Ejemplo:
@@ -379,6 +402,8 @@ curl -X POST http://127.0.0.1:8787/v1/search \
 ```
 
 Si defines `NICASCAN_API_TOKEN`, envía `Authorization: Bearer <token>`.
+El panel está en <http://127.0.0.1:8787/panel>; guarda el token en el navegador
+si lo configuraste.
 
 ## Para alimentar una IA
 
@@ -447,11 +472,11 @@ make dist
 - [x] Importación CSV/JSON/JSONL y exportación para IA.
 - [x] Termux/Linux/macOS/Windows.
 - [x] Enriquecimiento respetuoso desde sitios web (JSON-LD, `mailto:`, `tel:`).
-- [x] Fuente Overture Maps desde GeoJSON local.
+- [x] Overture Maps: descarga automática por PMTiles y lectura de GeoJSON local.
 - [x] API local para agentes (`nicascan serve`).
 - [x] Calidad de ficha, revisión de duplicados y fusión manual.
-- [ ] Descarga/extracción automática de Overture desde S3.
-- [ ] Panel web de revisión.
+- [x] Panel web de búsqueda, calidad y revisión de duplicados.
+- [ ] Extracción Overture de país completo sin DuckDB (requiere dataset particionado por país).
 
 ## Licencia
 

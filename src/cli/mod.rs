@@ -4,6 +4,7 @@ mod db_cmd;
 mod enrich;
 mod export_cmd;
 mod import_cmd;
+mod overture;
 mod places;
 mod review;
 mod scan;
@@ -99,6 +100,8 @@ pub enum Command {
     Duplicates(review::DuplicatesArgs),
     /// Fusiona dos negocios manualmente
     Merge(review::MergeArgs),
+    /// Descarga automática de Overture Maps vía PMTiles
+    Overture(overture::OvertureArgs),
     /// Utilidades de la base de datos
     Db(db_cmd::DbArgs),
 }
@@ -382,6 +385,7 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Command::Serve(args) => serve::run(args, &config, &cli.global, &theme).await,
         Command::Duplicates(args) => review::duplicates(args, &config, &cli.global, &theme),
         Command::Merge(args) => review::merge(args, &config, &cli.global, &theme),
+        Command::Overture(args) => overture::run(args, &config, &cli.global, &theme).await,
         Command::Db(args) => db_cmd::run(args, &config, &cli.global, &theme),
     }
 }

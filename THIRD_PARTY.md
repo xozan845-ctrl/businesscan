@@ -31,7 +31,8 @@ Apache-2.0. Entre ellos: `clap`, `serde`, `serde_json`, `tokio`, `reqwest`,
 `rusqlite`/`libsqlite3-sys` (SQLite dominio público), `chrono`, `csv`,
 `comfy-table`, `owo-colors`, `indicatif`, `url`, `unicode-normalization`,
 `strsim`, `ulid`, `directories`, `env_logger`, `log`, `anyhow`, `thiserror`,
-`encoding_rs`, `scraper` (HTML), `axum` y `tower-http` (API local).
+`encoding_rs`, `scraper` (HTML), `axum` y `tower-http` (API local),
+`mapbox_vector_tile` (MVT), `flate2`/`zstd` (compresión PMTiles).
 
 Puedes generar el inventario exacto con:
 

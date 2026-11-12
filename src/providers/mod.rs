@@ -6,6 +6,7 @@ pub mod google;
 pub mod import;
 pub mod overpass;
 pub mod overture;
+pub mod overture_pmtiles;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;

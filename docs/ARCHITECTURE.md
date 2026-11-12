@@ -196,12 +196,29 @@ duplicados).
 
 ## Overture Maps
 
-Overture se distribuye como GeoParquet en S3; leerlo completo no es viable en
-Termux. `nicascan` acepta un extracto **GeoJSON/JSONL** generado con DuckDB y lo
-consulta como fuente `overture` (opt-in). El proveedor mapea `names`,
-`categories`, `confidence`, `phones`, `emails`, `websites`, `socials`,
-`addresses`, `operating_status` y el punto GeoJSON. El filtro geográfico se
-aplica con el bbox/radio resuelto.
+Hay dos caminos:
+
+1. **PMTiles automático** (`overture fetch`): descubre la release latest en el
+   STAC, abre `places.pmtiles` con HTTP Range, navega los directorios PMTiles
+   (varints, gzip/zstd) y descarga solo los tiles del bbox. Decodifica MVT
+   (`mapbox_vector_tile`), convierte propiedades (que llegan como JSON en
+   strings) y reutiliza el mapeo de `providers/overture.rs`. No requiere DuckDB;
+   el archivo público tiene datos en zoom 14, así que está pensado para barrios,
+   ciudades y áreas medianas.
+2. **GeoJSON/JSONL local** (`scan --overture-file`): un extracto preparado con
+   DuckDB para país completo o trabajo offline. Se aplica el bbox/radio resuelto.
+
+## Panel web
+
+`serve` expone `/panel`, una página HTML/CSS/JS embebida (sin build ni CDN) con:
+
+- búsqueda y filtros contra `/v1/businesses`,
+- ficha completa con contactos y procedencia,
+- revisión de duplicados (`/v1/duplicates`) y fusión (`/v1/merge`),
+- resumen de cobertura/calidad.
+
+Si hay `NICASCAN_API_TOKEN`, el panel pide el token y lo guarda en
+`localStorage` para enviar `Authorization: Bearer`.
 
 ## API
 
@@ -222,7 +239,8 @@ salvo `full=false`. `/v1/export` pagina internamente y devuelve NDJSON.
 ## Pruebas
 
 - Unitarias: normalización, gafete, geohash, consultas Overpass, mapeo de
-  Google/Foursquare/Overture/import, robots y JSON-LD.
+  Google/Foursquare/Overture/import, robots, JSON-LD, PMTiles (Hilbert,
+  directorios, coordenadas) y conversión MVT.
 - Integración (`tests/database.rs`): FTS, filtros, calidad, deduplicación por
   teléfono y nombre+cercanía, detección y fusión manual de duplicados.
 - Exportación JSONL/CSV en memoria y pruebas manuales de la API con `curl`.

@@ -92,11 +92,33 @@ un nombre sintético). No se inventan teléfonos ni correos.
 - El rating original 0–10 se conserva también en
   `foursquare.rating_10` dentro de etiquetas.
 
-## Overture Maps (GeoJSON local)
+## Overture Maps (PMTiles automático)
 
-Overture publica `theme=places/type=place` como GeoParquet en
-`s3://overturemaps-us-west-2/release/...`. NicaScan no descarga el planeta:
-lee un **extracto GeoJSON/JSONL** ya filtrado por tu zona.
+Overture publica Places como PMTiles en
+`https://tiles.overturemaps.org/<release>/places.pmtiles`. NicaScan:
+
+1. Descubre la release `latest` en `https://stac.overturemaps.org/catalog.json`.
+2. Abre el PMTiles con HTTP Range (header y directorios).
+3. Calcula los tiles del bbox y descarga **solo esos tiles**.
+4. Decodifica MVT y mapea `names`, `taxonomy`, `addresses`, `phones`, `emails`,
+   `websites`, `socials`, `confidence`, `id` y estado.
+
+```bash
+nicascan overture latest
+nicascan overture fetch --departamento León --limit 300
+nicascan overture fetch --lat 12.1364 --lon -86.2514 --radius 1000 --limit 100
+```
+
+El PMTiles público está poblado en zoom 14. Para áreas muy grandes (país entero)
+el número de tiles crece demasiado; usa un extracto local o sube `--max-tiles`
+bajo tu responsabilidad. El comando muestra una estimación de tamaño antes de
+fallar.
+
+## Overture Maps (GeoJSON local, alternativa)
+
+Overture también publica `theme=places/type=place` como GeoParquet en
+`s3://overturemaps-us-west-2/release/...`. NicaScan puede leer un **extracto
+GeoJSON/JSONL** ya filtrado por tu zona.
 
 Extracción típica con DuckDB (requiere extensión `spatial` y acceso a S3):
 
@@ -115,6 +137,9 @@ Luego:
 ```bash
 nicascan scan --all --source overture --overture-file overture-managua.geojson
 ```
+
+Esta vía es la recomendada para país completo o para trabajar sin red después
+de preparar el extracto.
 
 Mapeo:
 
